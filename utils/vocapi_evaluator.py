@@ -16,6 +16,7 @@ import xml.etree.ElementTree as ET
 
 class VOCAPIEvaluator():
     """ VOC AP Evaluation class """
+
     def __init__(self, data_root, img_size, device, transform, set_type='test', year='2007', display=False):
         self.data_root = data_root
         self.img_size = img_size
@@ -28,13 +29,16 @@ class VOCAPIEvaluator():
 
         # path
         self.devkit_path = data_root + 'VOC' + year
-        self.annopath = os.path.join(data_root, 'VOC2007', 'Annotations', '%s.xml')
-        self.imgpath = os.path.join(data_root, 'VOC2007', 'JPEGImages', '%s.jpg')
-        self.imgsetpath = os.path.join(data_root, 'VOC2007', 'ImageSets', 'Main', set_type+'.txt')
+        self.annopath = os.path.join(
+            data_root, 'VOC2007', 'Annotations', '%s.xml')
+        self.imgpath = os.path.join(
+            data_root, 'VOC2007', 'JPEGImages', '%s.jpg')
+        self.imgsetpath = os.path.join(
+            data_root, 'VOC2007', 'ImageSets', 'Main', set_type+'.txt')
         self.output_dir = self.get_output_dir('voc_eval/', self.set_type)
 
         # dataset
-        self.dataset = VOCDetection(data_dir=data_root, 
+        self.dataset = VOCDetection(data_dir=data_root,
                                     image_sets=[('2007', set_type)],
                                     transform=transform
                                     )
@@ -46,7 +50,7 @@ class VOCAPIEvaluator():
         #    all_boxes[cls][image] = N x 5 array of detections in
         #    (x1, y1, x2, y2, score)
         self.all_boxes = [[[] for _ in range(num_images)]
-                        for _ in range(len(self.labelmap))]
+                          for _ in range(len(self.labelmap))]
 
         # timers
         det_file = os.path.join(self.output_dir, 'detections.pkl')
@@ -71,11 +75,12 @@ class VOCAPIEvaluator():
                 c_scores = scores[inds]
                 c_dets = np.hstack((c_bboxes,
                                     c_scores[:, np.newaxis])).astype(np.float32,
-                                                                    copy=False)
+                                                                     copy=False)
                 self.all_boxes[j][i] = c_dets
 
             if i % 500 == 0:
-                print('im_detect: {:d}/{:d} {:.3f}s'.format(i + 1, num_images, detect_time))
+                print(
+                    'im_detect: {:d}/{:d} {:.3f}s'.format(i + 1, num_images, detect_time))
 
         with open(det_file, 'wb') as f:
             pickle.dump(self.all_boxes, f, pickle.HIGHEST_PROTOCOL)
@@ -84,7 +89,6 @@ class VOCAPIEvaluator():
         self.evaluate_detections(self.all_boxes)
 
         print('Mean AP: ', self.map)
-  
 
     def parse_rec(self, filename):
         """ Parse a PASCAL VOC xml file """
@@ -98,13 +102,12 @@ class VOCAPIEvaluator():
             obj_struct['difficult'] = int(obj.find('difficult').text)
             bbox = obj.find('bndbox')
             obj_struct['bbox'] = [int(bbox.find('xmin').text),
-                                int(bbox.find('ymin').text),
-                                int(bbox.find('xmax').text),
-                                int(bbox.find('ymax').text)]
+                                  int(bbox.find('ymin').text),
+                                  int(bbox.find('xmax').text),
+                                  int(bbox.find('ymax').text)]
             objects.append(obj_struct)
 
         return objects
-
 
     def get_output_dir(self, name, phase):
         """Return the directory where experimental artifacts are placed.
@@ -117,7 +120,6 @@ class VOCAPIEvaluator():
             os.makedirs(filedir)
         return filedir
 
-
     def get_voc_results_file_template(self, cls):
         # VOCdevkit/VOC2007/results/det_test_aeroplane.txt
         filename = 'det_' + self.set_type + '_%s.txt' % (cls)
@@ -126,7 +128,6 @@ class VOCAPIEvaluator():
             os.makedirs(filedir)
         path = os.path.join(filedir, filename)
         return path
-
 
     def write_voc_results_file(self, all_boxes):
         for cls_ind, cls in enumerate(self.labelmap):
@@ -142,9 +143,8 @@ class VOCAPIEvaluator():
                     for k in range(dets.shape[0]):
                         f.write('{:s} {:.3f} {:.1f} {:.1f} {:.1f} {:.1f}\n'.
                                 format(index[1], dets[k, -1],
-                                    dets[k, 0] + 1, dets[k, 1] + 1,
-                                    dets[k, 2] + 1, dets[k, 3] + 1))
-
+                                       dets[k, 0] + 1, dets[k, 1] + 1,
+                                       dets[k, 2] + 1, dets[k, 3] + 1))
 
     def do_python_eval(self, use_07=True):
         cachedir = os.path.join(self.devkit_path, 'annotations_cache')
@@ -156,12 +156,12 @@ class VOCAPIEvaluator():
             os.mkdir(self.output_dir)
         for i, cls in enumerate(self.labelmap):
             filename = self.get_voc_results_file_template(cls)
-            rec, prec, ap = self.voc_eval(detpath=filename, 
-                                          classname=cls, 
-                                          cachedir=cachedir, 
-                                          ovthresh=0.5, 
+            rec, prec, ap = self.voc_eval(detpath=filename,
+                                          classname=cls,
+                                          cachedir=cachedir,
+                                          ovthresh=0.5,
                                           use_07_metric=use_07_metric
-                                        )
+                                          )
             aps += [ap]
             print('AP for {} = {:.4f}'.format(cls, ap))
             with open(os.path.join(self.output_dir, cls + '_pr.pkl'), 'wb') as f:
@@ -183,7 +183,6 @@ class VOCAPIEvaluator():
         else:
             self.map = np.mean(aps)
             print('Mean AP = {:.4f}'.format(np.mean(aps)))
-
 
     def voc_ap(self, rec, prec, use_07_metric=True):
         """ ap = voc_ap(rec, prec, [use_07_metric])
@@ -218,7 +217,6 @@ class VOCAPIEvaluator():
             ap = np.sum((mrec[i + 1] - mrec[i]) * mpre[i + 1])
         return ap
 
-
     def voc_eval(self, detpath, classname, cachedir, ovthresh=0.5, use_07_metric=True):
         if not os.path.isdir(cachedir):
             os.mkdir(cachedir)
@@ -234,7 +232,7 @@ class VOCAPIEvaluator():
                 recs[imagename] = self.parse_rec(self.annopath % (imagename))
                 if i % 100 == 0 and self.display:
                     print('Reading annotation for {:d}/{:d}'.format(
-                    i + 1, len(imagenames)))
+                        i + 1, len(imagenames)))
             # save
             if self.display:
                 print('Saving cached annotations to {:s}'.format(cachefile))
@@ -251,12 +249,12 @@ class VOCAPIEvaluator():
         for imagename in imagenames:
             R = [obj for obj in recs[imagename] if obj['name'] == classname]
             bbox = np.array([x['bbox'] for x in R])
-            difficult = np.array([x['difficult'] for x in R]).astype(np.bool)
+            difficult = np.array([x['difficult'] for x in R]).astype(bool)
             det = [False] * len(R)
             npos = npos + sum(~difficult)
             class_recs[imagename] = {'bbox': bbox,
-                                    'difficult': difficult,
-                                    'det': det}
+                                     'difficult': difficult,
+                                     'det': det}
 
         # read dets
         detfile = detpath.format(classname)
@@ -295,8 +293,8 @@ class VOCAPIEvaluator():
                     ih = np.maximum(iymax - iymin, 0.)
                     inters = iw * ih
                     uni = ((bb[2] - bb[0]) * (bb[3] - bb[1]) +
-                        (BBGT[:, 2] - BBGT[:, 0]) *
-                        (BBGT[:, 3] - BBGT[:, 1]) - inters)
+                           (BBGT[:, 2] - BBGT[:, 0]) *
+                           (BBGT[:, 3] - BBGT[:, 1]) - inters)
                     overlaps = inters / uni
                     ovmax = np.max(overlaps)
                     jmax = np.argmax(overlaps)
@@ -325,7 +323,6 @@ class VOCAPIEvaluator():
             ap = -1.
 
         return rec, prec, ap
-
 
     def evaluate_detections(self, box_list):
         self.write_voc_results_file(box_list)
