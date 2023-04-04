@@ -20,7 +20,7 @@ def all_gather(data):
         return [data]
 
     # serialized to a Tensor
-    buffer = pickle.dumps(data)
+    buffer = pickle.ducpu(data)
     storage = torch.ByteStorage.from_buffer(buffer)
     tensor = torch.ByteTensor(storage).to("cuda")
 

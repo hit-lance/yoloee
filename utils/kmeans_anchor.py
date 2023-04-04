@@ -6,7 +6,6 @@ import sys
 sys.path.append('..')
 
 from data.voc0712 import VOCDetection
-from data.coco2017 import COCODataset
 
 
 def parse_args():
@@ -14,8 +13,7 @@ def parse_args():
 
     parser.add_argument('-root', '--data_root', default='/mnt/share/ssd2/dataset',
                         help='dataset root')
-    parser.add_argument('-d', '--dataset', default='coco',
-                        help='coco, voc.')
+    parser.add_argument('-d', '--dataset', default='voc')
     parser.add_argument('-na', '--num_anchorbox', default=9, type=int,
                         help='number of anchor box.')
     parser.add_argument('-size', '--input_size', default=416, type=int,
@@ -184,9 +182,6 @@ if __name__ == "__main__":
     dataset_voc = VOCDetection(data_dir=os.path.join(args.root, 'VOCdevkit'), 
                                 img_size=img_size)
 
-    dataset_coco = COCODataset(data_dir=os.path.join(args.root, 'COCO'),
-                                img_size=img_size)
-
     boxes = []
     print("The dataset size: ", len(dataset))
     print("Loading the dataset ...")
@@ -199,27 +194,6 @@ if __name__ == "__main__":
         img, _ = dataset_voc.pull_image(i)
         w, h = img.shape[1], img.shape[0]
         _, annotation = dataset_voc.pull_anno(i)
-
-        # prepare bbox datas
-        for box_and_label in annotation:
-            box = box_and_label[:-1]
-            xmin, ymin, xmax, ymax = box
-            bw = (xmax - xmin) / w * img_size
-            bh = (ymax - ymin) / h * img_size
-            # check bbox
-            if bw < 1.0 or bh < 1.0:
-                continue
-            boxes.append(Box(0, 0, bw, bh))
-
-    # COCO
-    for i in range(len(dataset_coco)):
-        if i % 5000 == 0:
-            print('Loading coco datat [%d / %d]' % (i+1, len(dataset_coco)))
-
-        # For COCO
-        img, _ = dataset_coco.pull_image(i)
-        w, h = img.shape[1], img.shape[0]
-        annotation = dataset_coco.pull_anno(i)
 
         # prepare bbox datas
         for box_and_label in annotation:

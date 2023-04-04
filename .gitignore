@@ -5,3 +5,5 @@
 __pycache__
 .vscode
 det_results
+log
+data/VOC*
