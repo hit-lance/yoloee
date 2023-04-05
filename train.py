@@ -117,19 +117,19 @@ def train():
     net = YOLOv2R50(device=device,
                     input_size=train_size,
                     num_classes=num_classes,
-                    trainable=True,
+                    training=True,
                     anchor_size=anchor_size)
     model = net
     model = model.to(device).train()
 
     # compute FLOPs and Params
     model_copy = deepcopy(model)
-    model_copy.trainable = False
+    model_copy.training = False
     model_copy.eval()
     FLOPs_and_Params(model=model_copy,
                      size=train_size,
                      device=device)
-    model_copy.trainable = True
+    model_copy.training = True
     model_copy.train()
 
     batch_size = args.batch_size
@@ -202,7 +202,7 @@ def train():
                 # randomly choose a new size
                 r = cfg['random_size_range']
                 train_size = random.randint(r[0], r[1]) * 32
-                model.set_grid(train_size)
+
             if args.multi_scale:
                 # interpolate
                 images = torch.nn.functional.interpolate(
@@ -226,8 +226,24 @@ def train():
             targets = torch.tensor(targets).float().to(device)
 
             # forward
-            conf_loss, cls_loss, box_loss, iou_loss = model(
-                images, target=targets)
+            conf_pred, cls_pred, reg_pred, x1y1x2y2_pred = model(images)
+            
+            x1y1x2y2_gt = targets[:, :, 7:].view(-1, 4)
+            reg_pred = reg_pred.view(batch_size, -1, 4)
+
+            # set conf target
+            iou_pred = tools.iou_score(
+                x1y1x2y2_pred, x1y1x2y2_gt).view(batch_size, -1, 1)
+            gt_conf = iou_pred.clone().detach()
+
+            # [obj, cls, txtytwth, x1y1x2y2] -> [conf, obj, cls, txtytwth]
+            targets = torch.cat([gt_conf, targets[:, :, :7]], dim=2)
+            conf_loss, cls_loss, box_loss, iou_loss = tools.loss(pred_conf=conf_pred,
+                                                                 pred_cls=cls_pred,
+                                                                 pred_txtytwth=reg_pred,
+                                                                 pred_iou=iou_pred,
+                                                                 label=targets
+                                                                 )
 
             # compute loss
             total_loss = conf_loss + cls_loss + box_loss + iou_loss
@@ -306,7 +322,7 @@ def train():
             else:
                 print('eval ...')
                 # set eval mode
-                model_eval.trainable = False
+                model_eval.training = False
                 model_eval.set_grid(val_size)
                 model_eval.eval()
 
@@ -328,7 +344,7 @@ def train():
                     tblogger.add_scalar('07test/mAP', evaluator.map, epoch)
 
                 # set train mode.
-                model_eval.trainable = True
+                model_eval.training = True
                 model_eval.set_grid(train_size)
                 model_eval.train()
 

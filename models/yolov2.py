@@ -7,20 +7,20 @@ import numpy as np
 import tools
 
 
-class YOLOv2R50(nn.Module):
-    def __init__(self, device, input_size=None, num_classes=20, training=False, anchor_size=None, hr=False):
-        super(YOLOv2R50, self).__init__()
+class YOLOv2(nn.Module):
+    def __init__(self, device, input_size=None, num_classes=20, trainable=False, anchor_size=None, hr=False):
+        super(YOLOv2, self).__init__()
         self.device = device
         self.input_size = input_size
         self.num_classes = num_classes
-        self.training = training
+        self.trainable = trainable
         self.anchor_size = torch.tensor(anchor_size)
         self.num_anchors = len(anchor_size)
         self.grid_cell, self.all_anchor_wh = self.create_grid(input_size)
 
         # backbone
         self.backbone = build_backbone(
-            model_name='resnet50', pretrained=training)
+            model_name='resnet50', pretrained=trainable)
 
         # head
         self.convsets_1 = nn.Sequential(
@@ -71,7 +71,11 @@ class YOLOv2R50(nn.Module):
                 xywh_pred : [B, H*W*anchor_n, 4] \n
         """
         B, HW, ab_n, _ = txtytwth_pred.size()
+        # b_x = sigmoid(tx) + gride_x
+        # b_y = sigmoid(ty) + gride_y
         xy_pred = torch.sigmoid(txtytwth_pred[:, :, :, :2]) + self.grid_cell
+        # b_w = anchor_w * exp(tw)
+        # b_h = anchor_h * exp(th)
         wh_pred = torch.exp(txtytwth_pred[:, :, :, 2:]) * self.all_anchor_wh
         # [H*W, anchor_n, 4] -> [H*W*anchor_n, 4]
         xywh_pred = torch.cat([xy_pred, wh_pred], -
@@ -216,7 +220,7 @@ class YOLOv2R50(nn.Module):
         return bboxes, scores, cls_inds
 
     def forward(self, x, target=None):
-        if not self.training:
+        if not self.trainable:
             return self.inference(x)
         else:
             # backbone
@@ -248,9 +252,35 @@ class YOLOv2R50(nn.Module):
             reg_pred = pred[:, :, (1 + self.num_classes)
                             * self.num_anchors:].contiguous()
             reg_pred = reg_pred.view(B, H*W, self.num_anchors, 4)
+            
             box_pred = self.decode_boxes(reg_pred)
+
+            # return conf_pred, cls_pred, box_pred
 
             # decode bbox
             x1y1x2y2_pred = (box_pred / self.input_size).view(-1, 4)
+            x1y1x2y2_gt = target[:, :, 7:].view(-1, 4)
+            reg_pred = reg_pred.view(B, H*W*self.num_anchors, 4)
 
-            return conf_pred, cls_pred, reg_pred, x1y1x2y2_pred
+            # set conf target
+            iou_pred = tools.iou_score(
+                x1y1x2y2_pred, x1y1x2y2_gt).view(B, -1, 1)
+            gt_conf = iou_pred.clone().detach()
+
+            # [obj, cls, txtytwth, x1y1x2y2] -> [conf, obj, cls, txtytwth]
+            target = torch.cat([gt_conf, target[:, :, :7]], dim=2)
+
+            # loss
+            (
+                conf_loss,
+                cls_loss,
+                bbox_loss,
+                iou_loss
+            ) = tools.loss(pred_conf=conf_pred,
+                           pred_cls=cls_pred,
+                           pred_txtytwth=reg_pred,
+                           pred_iou=iou_pred,
+                           label=target
+                           )
+
+            return conf_loss, cls_loss, bbox_loss, iou_loss
