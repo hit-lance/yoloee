@@ -7,3 +7,4 @@ __pycache__
 det_results
 log
 data/VOC*
+nohup
