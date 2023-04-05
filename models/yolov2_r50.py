@@ -8,6 +8,7 @@ import tools
 
 
 class YOLOv2R50(nn.Module):
+
     def __init__(self,
                  device,
                  input_size=None,
@@ -100,70 +101,6 @@ class YOLOv2R50(nn.Module):
 
         return x1y1x2y2_pred
 
-    def nms(self, dets, scores):
-        """"Pure Python NMS baseline."""
-        x1 = dets[:, 0]  # xmin
-        y1 = dets[:, 1]  # ymin
-        x2 = dets[:, 2]  # xmax
-        y2 = dets[:, 3]  # ymax
-
-        areas = (x2 - x1) * (y2 - y1)
-        order = scores.argsort()[::-1]
-
-        keep = []
-        while order.size > 0:
-            i = order[0]
-            keep.append(i)
-            xx1 = np.maximum(x1[i], x1[order[1:]])
-            yy1 = np.maximum(y1[i], y1[order[1:]])
-            xx2 = np.minimum(x2[i], x2[order[1:]])
-            yy2 = np.minimum(y2[i], y2[order[1:]])
-
-            w = np.maximum(1e-10, xx2 - xx1)
-            h = np.maximum(1e-10, yy2 - yy1)
-            inter = w * h
-
-            # Cross Area / (bbox + particular area - Cross Area)
-            ovr = inter / (areas[i] + areas[order[1:]] - inter)
-            # reserve all the boundingbox whose ovr less than thresh
-            inds = np.where(ovr <= 0.6)[0]
-            order = order[inds + 1]
-
-        return keep
-
-    def postprocess(self, bboxes, scores):
-        """
-        bboxes: (HxW, 4), bsize = 1
-        scores: (HxW, num_classes), bsize = 1
-        """
-
-        cls_inds = np.argmax(scores, axis=1)
-        scores = scores[(np.arange(scores.shape[0]), cls_inds)]
-
-        # threshold
-        keep = np.where(scores >= 0.001)
-        bboxes = bboxes[keep]
-        scores = scores[keep]
-        cls_inds = cls_inds[keep]
-
-        # NMS
-        keep = np.zeros(len(bboxes), dtype=int)
-        for i in range(self.num_classes):
-            inds = np.where(cls_inds == i)[0]
-            if len(inds) == 0:
-                continue
-            c_bboxes = bboxes[inds]
-            c_scores = scores[inds]
-            c_keep = self.nms(c_bboxes, c_scores)
-            keep[inds[c_keep]] = 1
-
-        keep = np.where(keep > 0)
-        bboxes = bboxes[keep]
-        scores = scores[keep]
-        cls_inds = cls_inds[keep]
-
-        return bboxes, scores, cls_inds
-
     def forward(self, x, target=None):
         # backbone
         feats = self.backbone(x)
@@ -197,28 +134,4 @@ class YOLOv2R50(nn.Module):
         reg_pred = reg_pred.view(B, H * W, self.num_anchors, 4)
         box_pred = self.decode_boxes(reg_pred)
 
-        if self.training:
-            # decode bbox
-            x1y1x2y2_pred = (box_pred / self.input_size).view(-1, 4)
-
-            return conf_pred, cls_pred, reg_pred, x1y1x2y2_pred
-
-        # batch size = 1
-        conf_pred = conf_pred[0]
-        cls_pred = cls_pred[0]
-        box_pred = box_pred[0]
-
-        # score
-        scores = torch.sigmoid(conf_pred) * torch.softmax(cls_pred, dim=-1)
-
-        # normalize bbox
-        bboxes = torch.clamp(box_pred / self.input_size, 0., 1.)
-
-        # to cpu
-        scores = scores.to('cpu').numpy()
-        bboxes = bboxes.to('cpu').numpy()
-
-        # post-process
-        bboxes, scores, cls_inds = self.postprocess(bboxes, scores)
-
-        return bboxes, scores, cls_inds
+        return conf_pred, cls_pred, reg_pred, box_pred

@@ -4,6 +4,7 @@
     Licensed under The MIT License [see LICENSE for details]
 """
 
+import torch
 from torch.autograd import Variable
 from data.voc0712 import VOCDetection, VOC_CLASSES
 import sys
@@ -17,7 +18,14 @@ import xml.etree.ElementTree as ET
 class VOCAPIEvaluator():
     """ VOC AP Evaluation class """
 
-    def __init__(self, data_root, img_size, device, transform, set_type='test', year='2007', display=False):
+    def __init__(self,
+                 data_root,
+                 img_size,
+                 device,
+                 transform,
+                 set_type='test',
+                 year='2007',
+                 display=False):
         self.data_root = data_root
         self.img_size = img_size
         self.device = device
@@ -29,19 +37,18 @@ class VOCAPIEvaluator():
 
         # path
         self.devkit_path = data_root + 'VOC' + year
-        self.annopath = os.path.join(
-            data_root, 'VOC2007', 'Annotations', '%s.xml')
-        self.imgpath = os.path.join(
-            data_root, 'VOC2007', 'JPEGImages', '%s.jpg')
-        self.imgsetpath = os.path.join(
-            data_root, 'VOC2007', 'ImageSets', 'Main', set_type+'.txt')
+        self.annopath = os.path.join(data_root, 'VOC2007', 'Annotations',
+                                     '%s.xml')
+        self.imgpath = os.path.join(data_root, 'VOC2007', 'JPEGImages',
+                                    '%s.jpg')
+        self.imgsetpath = os.path.join(data_root, 'VOC2007', 'ImageSets',
+                                       'Main', set_type + '.txt')
         self.output_dir = self.get_output_dir('voc_eval/', self.set_type)
 
         # dataset
         self.dataset = VOCDetection(data_dir=data_root,
                                     image_sets=[('2007', set_type)],
-                                    transform=transform
-                                    )
+                                    transform=transform)
 
     def evaluate(self, net):
         net.eval()
@@ -55,32 +62,49 @@ class VOCAPIEvaluator():
         # timers
         det_file = os.path.join(self.output_dir, 'detections.pkl')
 
-        for i in range(num_images):
-            im, gt, h, w = self.dataset.pull_item(i)
+        with torch.no_grad():
+            for i in range(num_images):
+                im, gt, h, w = self.dataset.pull_item(i)
 
-            x = Variable(im.unsqueeze(0)).to(self.device)
-            t0 = time.time()
-            # forward
-            bboxes, scores, cls_inds = net(x)
-            detect_time = time.time() - t0
-            scale = np.array([[w, h, w, h]])
-            bboxes *= scale
+                x = Variable(im.unsqueeze(0)).to(self.device)
+                t0 = time.time()
+                # forward
+                conf_pred, cls_pred, _, box_pred = net(x)
 
-            for j in range(len(self.labelmap)):
-                inds = np.where(cls_inds == j)[0]
-                if len(inds) == 0:
-                    self.all_boxes[j][i] = np.empty([0, 5], dtype=np.float32)
-                    continue
-                c_bboxes = bboxes[inds]
-                c_scores = scores[inds]
-                c_dets = np.hstack((c_bboxes,
-                                    c_scores[:, np.newaxis])).astype(np.float32,
-                                                                     copy=False)
-                self.all_boxes[j][i] = c_dets
+                # score
+                scores = torch.sigmoid(conf_pred[0]) * torch.softmax(
+                    cls_pred[0], dim=-1)
 
-            if i % 500 == 0:
-                print(
-                    'im_detect: {:d}/{:d} {:.3f}s'.format(i + 1, num_images, detect_time))
+                # normalize bbox
+                bboxes = torch.clamp(box_pred[0] / h, 0., 1.)
+
+                # to cpu
+                scores = scores.to('cpu').numpy()
+                bboxes = bboxes.to('cpu').numpy()
+
+                # post-process
+                bboxes, scores, cls_inds = self.postprocess(bboxes, scores)
+
+                detect_time = time.time() - t0
+                scale = np.array([[w, h, w, h]])
+                bboxes *= scale
+
+                for j in range(len(self.labelmap)):
+                    inds = np.where(cls_inds == j)[0]
+                    if len(inds) == 0:
+                        self.all_boxes[j][i] = np.empty([0, 5],
+                                                        dtype=np.float32)
+                        continue
+                    c_bboxes = bboxes[inds]
+                    c_scores = scores[inds]
+                    c_dets = np.hstack(
+                        (c_bboxes, c_scores[:, np.newaxis])).astype(np.float32,
+                                                                    copy=False)
+                    self.all_boxes[j][i] = c_dets
+
+                if i % 500 == 0:
+                    print('im_detect: {:d}/{:d} {:.3f}s'.format(
+                        i + 1, num_images, detect_time))
 
         with open(det_file, 'wb') as f:
             pickle.dump(self.all_boxes, f, pickle.HIGHEST_PROTOCOL)
@@ -101,10 +125,12 @@ class VOCAPIEvaluator():
             obj_struct['truncated'] = int(obj.find('truncated').text)
             obj_struct['difficult'] = int(obj.find('difficult').text)
             bbox = obj.find('bndbox')
-            obj_struct['bbox'] = [int(bbox.find('xmin').text),
-                                  int(bbox.find('ymin').text),
-                                  int(bbox.find('xmax').text),
-                                  int(bbox.find('ymax').text)]
+            obj_struct['bbox'] = [
+                int(bbox.find('xmin').text),
+                int(bbox.find('ymin').text),
+                int(bbox.find('xmax').text),
+                int(bbox.find('ymax').text)
+            ]
             objects.append(obj_struct)
 
         return objects
@@ -141,10 +167,11 @@ class VOCAPIEvaluator():
                         continue
                     # the VOCdevkit expects 1-based indices
                     for k in range(dets.shape[0]):
-                        f.write('{:s} {:.3f} {:.1f} {:.1f} {:.1f} {:.1f}\n'.
-                                format(index[1], dets[k, -1],
-                                       dets[k, 0] + 1, dets[k, 1] + 1,
-                                       dets[k, 2] + 1, dets[k, 3] + 1))
+                        f.write(
+                            '{:s} {:.3f} {:.1f} {:.1f} {:.1f} {:.1f}\n'.format(
+                                index[1], dets[k, -1], dets[k, 0] + 1,
+                                dets[k, 1] + 1, dets[k, 2] + 1,
+                                dets[k, 3] + 1))
 
     def do_python_eval(self, use_07=True):
         cachedir = os.path.join(self.devkit_path, 'annotations_cache')
@@ -160,11 +187,11 @@ class VOCAPIEvaluator():
                                           classname=cls,
                                           cachedir=cachedir,
                                           ovthresh=0.5,
-                                          use_07_metric=use_07_metric
-                                          )
+                                          use_07_metric=use_07_metric)
             aps += [ap]
             print('AP for {} = {:.4f}'.format(cls, ap))
-            with open(os.path.join(self.output_dir, cls + '_pr.pkl'), 'wb') as f:
+            with open(os.path.join(self.output_dir, cls + '_pr.pkl'),
+                      'wb') as f:
                 pickle.dump({'rec': rec, 'prec': prec, 'ap': ap}, f)
         if self.display:
             self.map = np.mean(aps)
@@ -176,10 +203,16 @@ class VOCAPIEvaluator():
             print('{:.3f}'.format(np.mean(aps)))
             print('~~~~~~~~')
             print('')
-            print('--------------------------------------------------------------')
+            print(
+                '--------------------------------------------------------------'
+            )
             print('Results computed with the **unofficial** Python eval code.')
-            print('Results should be very close to the official MATLAB eval code.')
-            print('--------------------------------------------------------------')
+            print(
+                'Results should be very close to the official MATLAB eval code.'
+            )
+            print(
+                '--------------------------------------------------------------'
+            )
         else:
             self.map = np.mean(aps)
             print('Mean AP = {:.4f}'.format(np.mean(aps)))
@@ -217,7 +250,12 @@ class VOCAPIEvaluator():
             ap = np.sum((mrec[i + 1] - mrec[i]) * mpre[i + 1])
         return ap
 
-    def voc_eval(self, detpath, classname, cachedir, ovthresh=0.5, use_07_metric=True):
+    def voc_eval(self,
+                 detpath,
+                 classname,
+                 cachedir,
+                 ovthresh=0.5,
+                 use_07_metric=True):
         if not os.path.isdir(cachedir):
             os.mkdir(cachedir)
         cachefile = os.path.join(cachedir, 'annots.pkl')
@@ -252,9 +290,11 @@ class VOCAPIEvaluator():
             difficult = np.array([x['difficult'] for x in R]).astype(bool)
             det = [False] * len(R)
             npos = npos + sum(~difficult)
-            class_recs[imagename] = {'bbox': bbox,
-                                     'difficult': difficult,
-                                     'det': det}
+            class_recs[imagename] = {
+                'bbox': bbox,
+                'difficult': difficult,
+                'det': det
+            }
 
         # read dets
         detfile = detpath.format(classname)
@@ -327,6 +367,70 @@ class VOCAPIEvaluator():
     def evaluate_detections(self, box_list):
         self.write_voc_results_file(box_list)
         self.do_python_eval()
+
+    def nms(self, dets, scores):
+        """"Pure Python NMS baseline."""
+        x1 = dets[:, 0]  # xmin
+        y1 = dets[:, 1]  # ymin
+        x2 = dets[:, 2]  # xmax
+        y2 = dets[:, 3]  # ymax
+
+        areas = (x2 - x1) * (y2 - y1)
+        order = scores.argsort()[::-1]
+
+        keep = []
+        while order.size > 0:
+            i = order[0]
+            keep.append(i)
+            xx1 = np.maximum(x1[i], x1[order[1:]])
+            yy1 = np.maximum(y1[i], y1[order[1:]])
+            xx2 = np.minimum(x2[i], x2[order[1:]])
+            yy2 = np.minimum(y2[i], y2[order[1:]])
+
+            w = np.maximum(1e-10, xx2 - xx1)
+            h = np.maximum(1e-10, yy2 - yy1)
+            inter = w * h
+
+            # Cross Area / (bbox + particular area - Cross Area)
+            ovr = inter / (areas[i] + areas[order[1:]] - inter)
+            # reserve all the boundingbox whose ovr less than thresh
+            inds = np.where(ovr <= 0.6)[0]
+            order = order[inds + 1]
+
+        return keep
+
+    def postprocess(self, bboxes, scores):
+        """
+        bboxes: (HxW, 4), bsize = 1
+        scores: (HxW, num_classes), bsize = 1
+        """
+
+        cls_inds = np.argmax(scores, axis=1)
+        scores = scores[(np.arange(scores.shape[0]), cls_inds)]
+
+        # threshold
+        keep = np.where(scores >= 0.001)
+        bboxes = bboxes[keep]
+        scores = scores[keep]
+        cls_inds = cls_inds[keep]
+
+        # NMS
+        keep = np.zeros(len(bboxes), dtype=int)
+        for i in range(scores.shape[-1]):
+            inds = np.where(cls_inds == i)[0]
+            if len(inds) == 0:
+                continue
+            c_bboxes = bboxes[inds]
+            c_scores = scores[inds]
+            c_keep = self.nms(c_bboxes, c_scores)
+            keep[inds[c_keep]] = 1
+
+        keep = np.where(keep > 0)
+        bboxes = bboxes[keep]
+        scores = scores[keep]
+        cls_inds = cls_inds[keep]
+
+        return bboxes, scores, cls_inds
 
 
 if __name__ == '__main__':
