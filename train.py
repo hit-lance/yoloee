@@ -28,40 +28,72 @@ from models.yolov2_r50 import YOLOv2R50
 def parse_args():
     parser = argparse.ArgumentParser(description='YOLO Detection')
     # basic
-    parser.add_argument('--cuda', action='store_true', default=False,
+    parser.add_argument('--cuda',
+                        action='store_true',
+                        default=False,
                         help='use cuda.')
-    parser.add_argument('-bs', '--batch_size', default=16, type=int,
+    parser.add_argument('-bs',
+                        '--batch_size',
+                        default=16,
+                        type=int,
                         help='Batch size for training')
-    parser.add_argument('--lr', default=1e-3, type=float,
+    parser.add_argument('--lr',
+                        default=1e-3,
+                        type=float,
                         help='initial learning rate')
-    parser.add_argument('--wp_epoch', type=int, default=2,
+    parser.add_argument('--wp_epoch',
+                        type=int,
+                        default=2,
                         help='The upper bound of warm-up')
-    parser.add_argument('--momentum', default=0.9, type=float,
+    parser.add_argument('--momentum',
+                        default=0.9,
+                        type=float,
                         help='Momentum value for optim')
-    parser.add_argument('--weight_decay', default=5e-4, type=float,
+    parser.add_argument('--weight_decay',
+                        default=5e-4,
+                        type=float,
                         help='Weight decay for SGD')
-    parser.add_argument('--num_workers', default=8, type=int,
+    parser.add_argument('--num_workers',
+                        default=8,
+                        type=int,
                         help='Number of workers used in dataloading')
-    parser.add_argument('--num_gpu', default=1, type=int,
+    parser.add_argument('--num_gpu',
+                        default=1,
+                        type=int,
                         help='Number of GPUs to train')
-    parser.add_argument('--eval_epoch', type=int,
-                        default=10, help='interval between evaluations')
-    parser.add_argument('--tfboard', action='store_true', default=False,
+    parser.add_argument('--eval_epoch',
+                        type=int,
+                        default=10,
+                        help='interval between evaluations')
+    parser.add_argument('--tfboard',
+                        action='store_true',
+                        default=False,
                         help='use tensorboard')
-    parser.add_argument('--save_folder', default='weights/', type=str,
+    parser.add_argument('--save_folder',
+                        default='weights/',
+                        type=str,
                         help='Gamma update for SGD')
-    parser.add_argument('--vis', action='store_true', default=False,
+    parser.add_argument('--vis',
+                        action='store_true',
+                        default=False,
                         help='visualize target.')
 
     # model
     parser.add_argument('-v', '--version', default='yolov2_r50')
 
     # train trick
-    parser.add_argument('--no_warmup', action='store_true', default=False,
+    parser.add_argument('--no_warmup',
+                        action='store_true',
+                        default=False,
                         help='do not use warmup')
-    parser.add_argument('-ms', '--multi_scale', action='store_true', default=False,
+    parser.add_argument('-ms',
+                        '--multi_scale',
+                        action='store_true',
+                        default=False,
                         help='use multi-scale trick')
-    parser.add_argument('--ema', action='store_true', default=False,
+    parser.add_argument('--ema',
+                        action='store_true',
+                        default=False,
                         help='use ema training trick')
 
     return parser.parse_args()
@@ -126,24 +158,20 @@ def train():
     model_copy = deepcopy(model)
     model_copy.training = False
     model_copy.eval()
-    FLOPs_and_Params(model=model_copy,
-                     size=train_size,
-                     device=device)
+    FLOPs_and_Params(model=model_copy, size=train_size, device=device)
     model_copy.training = True
     model_copy.train()
 
     batch_size = args.batch_size
 
     # dataloader
-    dataloader = torch.utils.data.DataLoader(
-        dataset=dataset,
-        shuffle=True,
-        batch_size=batch_size,
-        collate_fn=detection_collate,
-        num_workers=args.num_workers,
-        pin_memory=True,
-        drop_last=True
-    )
+    dataloader = torch.utils.data.DataLoader(dataset=dataset,
+                                             shuffle=True,
+                                             batch_size=batch_size,
+                                             collate_fn=detection_collate,
+                                             num_workers=args.num_workers,
+                                             pin_memory=True,
+                                             drop_last=True)
 
     # EMA
     ema = ModelEMA(model) if args.ema else None
@@ -165,8 +193,7 @@ def train():
     optimizer = optim.SGD(model.parameters(),
                           lr=base_lr,
                           momentum=args.momentum,
-                          weight_decay=args.weight_decay
-                          )
+                          weight_decay=args.weight_decay)
 
     max_epoch = cfg['max_epoch']
     epoch_size = len(dataloader)
@@ -206,8 +233,10 @@ def train():
 
             if args.multi_scale:
                 # interpolate
-                images = torch.nn.functional.interpolate(
-                    images, size=train_size, mode='bilinear', align_corners=False)
+                images = torch.nn.functional.interpolate(images,
+                                                         size=train_size,
+                                                         mode='bilinear',
+                                                         align_corners=False)
 
             targets = [label.tolist() for label in targets]
             # visualize labels
@@ -219,8 +248,7 @@ def train():
             targets = tools.gt_creator(input_size=train_size,
                                        stride=32,
                                        label_lists=targets,
-                                       anchor_size=anchor_size
-                                       )
+                                       anchor_size=anchor_size)
 
             # to device
             images = images.float().to(device)
@@ -228,23 +256,23 @@ def train():
 
             # forward
             conf_pred, cls_pred, reg_pred, x1y1x2y2_pred = model(images)
-            
+
             x1y1x2y2_gt = targets[:, :, 7:].view(-1, 4)
             reg_pred = reg_pred.view(batch_size, -1, 4)
 
             # set conf target
-            iou_pred = tools.iou_score(
-                x1y1x2y2_pred, x1y1x2y2_gt).view(batch_size, -1, 1)
+            iou_pred = tools.iou_score(x1y1x2y2_pred,
+                                       x1y1x2y2_gt).view(batch_size, -1, 1)
             gt_conf = iou_pred.clone().detach()
 
             # [obj, cls, txtytwth, x1y1x2y2] -> [conf, obj, cls, txtytwth]
             targets = torch.cat([gt_conf, targets[:, :, :7]], dim=2)
-            conf_loss, cls_loss, box_loss, iou_loss = tools.loss(pred_conf=conf_pred,
-                                                                 pred_cls=cls_pred,
-                                                                 pred_txtytwth=reg_pred,
-                                                                 pred_iou=iou_pred,
-                                                                 label=targets
-                                                                 )
+            conf_loss, cls_loss, box_loss, iou_loss = tools.loss(
+                pred_conf=conf_pred,
+                pred_cls=cls_pred,
+                pred_txtytwth=reg_pred,
+                pred_iou=iou_pred,
+                label=targets)
 
             # compute loss
             total_loss = conf_loss + cls_loss + box_loss + iou_loss
@@ -253,8 +281,7 @@ def train():
                              cls_loss=cls_loss,
                              box_loss=box_loss,
                              iou_loss=iou_loss,
-                             total_loss=total_loss
-                             )
+                             total_loss=total_loss)
 
             loss_dict_reduced = loss_dict
 
@@ -276,20 +303,25 @@ def train():
             if iter_i % 10 == 0:
                 if args.tfboard:
                     # viz loss
-                    tblogger.add_scalar(
-                        'conf loss',  loss_dict_reduced['conf_loss'].item(),  iter_i + epoch * epoch_size)
-                    tblogger.add_scalar(
-                        'cls loss',  loss_dict_reduced['cls_loss'].item(),  iter_i + epoch * epoch_size)
-                    tblogger.add_scalar(
-                        'box loss',  loss_dict_reduced['box_loss'].item(),  iter_i + epoch * epoch_size)
-                    tblogger.add_scalar(
-                        'iou loss',  loss_dict_reduced['iou_loss'].item(),  iter_i + epoch * epoch_size)
+                    tblogger.add_scalar('conf loss',
+                                        loss_dict_reduced['conf_loss'].item(),
+                                        iter_i + epoch * epoch_size)
+                    tblogger.add_scalar('cls loss',
+                                        loss_dict_reduced['cls_loss'].item(),
+                                        iter_i + epoch * epoch_size)
+                    tblogger.add_scalar('box loss',
+                                        loss_dict_reduced['box_loss'].item(),
+                                        iter_i + epoch * epoch_size)
+                    tblogger.add_scalar('iou loss',
+                                        loss_dict_reduced['iou_loss'].item(),
+                                        iter_i + epoch * epoch_size)
 
                 t1 = time.time()
-                cur_lr = [param_group['lr']
-                          for param_group in optimizer.param_groups]
+                cur_lr = [
+                    param_group['lr'] for param_group in optimizer.param_groups
+                ]
                 # basic infor
-                log = '[Epoch: {}/{}]'.format(epoch+1, max_epoch)
+                log = '[Epoch: {}/{}]'.format(epoch + 1, max_epoch)
                 log += '[Iter: {}/{}]'.format(iter_i, epoch_size)
                 log += '[lr: {:.6f}]'.format(cur_lr[0])
                 # loss infor
@@ -337,7 +369,7 @@ def train():
                     # save model
                     print('Saving state, epoch:', epoch + 1)
                     weight_name = '{}_epoch_{}_{:.2f}.pth'.format(
-                        args.version, epoch + 1, best_map*100)
+                        args.version, epoch + 1, best_map * 100)
                     checkpoint_path = os.path.join(path_to_save, weight_name)
                     torch.save(model_eval.state_dict(), checkpoint_path)
 
@@ -366,7 +398,7 @@ def vis_data(images, targets, input_size):
     std = np.array(std, dtype=np.float32)
 
     img = images[0].permute(1, 2, 0).cpu().numpy()[:, :, ::-1]
-    img = ((img * std + mean)*255).astype(np.uint8)
+    img = ((img * std + mean) * 255).astype(np.uint8)
     img = img.copy()
 
     for box in targets[0]:
@@ -376,8 +408,8 @@ def vis_data(images, targets, input_size):
         ymin *= input_size
         xmax *= input_size
         ymax *= input_size
-        cv2.rectangle(img, (int(xmin), int(ymin)),
-                      (int(xmax), int(ymax)), (0, 0, 255), 2)
+        cv2.rectangle(img, (int(xmin), int(ymin)), (int(xmax), int(ymax)),
+                      (0, 0, 255), 2)
 
     cv2.imshow('img', img)
     cv2.waitKey(0)
