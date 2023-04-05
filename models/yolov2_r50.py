@@ -8,17 +8,14 @@ import tools
 
 
 class YOLOv2R50(nn.Module):
-    def __init__(self, device, input_size=None, num_classes=20, trainable=False, conf_thresh=0.001, nms_thresh=0.6, anchor_size=None, hr=False):
+    def __init__(self, device, input_size=None, num_classes=20, trainable=False, anchor_size=None, hr=False):
         super(YOLOv2R50, self).__init__()
         self.device = device
         self.input_size = input_size
         self.num_classes = num_classes
         self.trainable = trainable
-        self.conf_thresh = conf_thresh
-        self.nms_thresh = nms_thresh
         self.anchor_size = torch.tensor(anchor_size)
         self.num_anchors = len(anchor_size)
-        self.stride = 32
         self.grid_cell, self.all_anchor_wh = self.create_grid(input_size)
 
         # backbone
@@ -44,10 +41,6 @@ class YOLOv2R50(nn.Module):
                               (1 + 4 + self.num_classes), 1)
 
         # init bias
-        self.init_bias()
-
-    def init_bias(self):
-        # init bias
         init_prob = 0.01
         bias_value = -torch.log(torch.tensor((1. - init_prob) / init_prob))
         nn.init.constant_(self.pred.bias[..., :self.num_anchors], bias_value)
@@ -55,7 +48,7 @@ class YOLOv2R50(nn.Module):
     def create_grid(self, input_size):
         w, h = input_size, input_size
         # generate grid cells
-        ws, hs = w // self.stride, h // self.stride
+        ws, hs = w // 32, h // 32
         grid_y, grid_x = torch.meshgrid([torch.arange(hs), torch.arange(ws)])
         grid_xy = torch.stack([grid_x, grid_y], dim=-1).float()
         grid_xy = grid_xy.view(1, hs*ws, 1, 2).to(self.device)
@@ -78,15 +71,11 @@ class YOLOv2R50(nn.Module):
                 xywh_pred : [B, H*W*anchor_n, 4] \n
         """
         B, HW, ab_n, _ = txtytwth_pred.size()
-        # b_x = sigmoid(tx) + gride_x
-        # b_y = sigmoid(ty) + gride_y
         xy_pred = torch.sigmoid(txtytwth_pred[:, :, :, :2]) + self.grid_cell
-        # b_w = anchor_w * exp(tw)
-        # b_h = anchor_h * exp(th)
         wh_pred = torch.exp(txtytwth_pred[:, :, :, 2:]) * self.all_anchor_wh
         # [H*W, anchor_n, 4] -> [H*W*anchor_n, 4]
         xywh_pred = torch.cat([xy_pred, wh_pred], -
-                              1).view(B, -1, 4) * self.stride
+                              1).view(B, -1, 4) * 32
 
         return xywh_pred
 
@@ -134,7 +123,7 @@ class YOLOv2R50(nn.Module):
             # Cross Area / (bbox + particular area - Cross Area)
             ovr = inter / (areas[i] + areas[order[1:]] - inter)
             # reserve all the boundingbox whose ovr less than thresh
-            inds = np.where(ovr <= self.nms_thresh)[0]
+            inds = np.where(ovr <= 0.6)[0]
             order = order[inds + 1]
 
         return keep
@@ -149,7 +138,7 @@ class YOLOv2R50(nn.Module):
         scores = scores[(np.arange(scores.shape[0]), cls_inds)]
 
         # threshold
-        keep = np.where(scores >= self.conf_thresh)
+        keep = np.where(scores >= 0.001)
         bboxes = bboxes[keep]
         scores = scores[keep]
         cls_inds = cls_inds[keep]

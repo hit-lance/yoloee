@@ -54,8 +54,7 @@ def parse_args():
                         help='visualize target.')
 
     # model
-    parser.add_argument('-v', '--version', default='yolov2_r50',
-                        help='yolov2_d19, yolov2_r50, yolov2_slim, yolov3, yolov3_spp, yolov3_tiny')
+    parser.add_argument('-v', '--version', default='yolov2_r50')
 
     # train trick
     parser.add_argument('--no_warmup', action='store_true', default=False,
@@ -217,7 +216,7 @@ def train():
 
             # label assignment
             targets = tools.gt_creator(input_size=train_size,
-                                       stride=net.stride,
+                                       stride=32,
                                        label_lists=targets,
                                        anchor_size=anchor_size
                                        )
