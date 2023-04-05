@@ -36,8 +36,6 @@ def parse_args():
                         help='initial learning rate')
     parser.add_argument('--wp_epoch', type=int, default=2,
                         help='The upper bound of warm-up')
-    parser.add_argument('--start_epoch', type=int, default=0,
-                        help='start epoch to train')
     parser.add_argument('--momentum', default=0.9, type=float,
                         help='Momentum value for optim')
     parser.add_argument('--weight_decay', default=5e-4, type=float,
@@ -178,7 +176,7 @@ def train():
 
     t0 = time.time()
     # start training loop
-    for epoch in range(args.start_epoch, max_epoch):
+    for epoch in range(max_epoch):
 
         # use step lr
         if epoch in cfg['lr_epoch']:

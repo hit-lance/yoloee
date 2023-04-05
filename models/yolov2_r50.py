@@ -43,9 +43,8 @@ class YOLOv2R50(nn.Module):
         self.pred = nn.Conv2d(1024, self.num_anchors *
                               (1 + 4 + self.num_classes), 1)
 
-        if self.trainable:
-            # init bias
-            self.init_bias()
+        # init bias
+        self.init_bias()
 
     def init_bias(self):
         # init bias
