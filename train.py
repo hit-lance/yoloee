@@ -202,6 +202,7 @@ def train():
                 # randomly choose a new size
                 r = cfg['random_size_range']
                 train_size = random.randint(r[0], r[1]) * 32
+                model.set_grid(train_size)
 
             if args.multi_scale:
                 # interpolate
