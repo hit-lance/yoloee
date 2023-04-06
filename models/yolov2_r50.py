@@ -12,7 +12,7 @@ class YOLOv2R50(nn.Module):
                  num_classes=20,
                  training=False,
                  anchor_size=None,
-                 hr=False):
+                 ):
         super(YOLOv2R50, self).__init__()
         self.device = device
         self.input_size = input_size

@@ -190,15 +190,6 @@ class ResNet50(nn.Module):
         self.layer3 = self._make_layer(Bottleneck, 256, 6, stride=2)
         self.layer4 = self._make_layer(Bottleneck, 512, 3, stride=2)
 
-        for m in self.modules():
-            if isinstance(m, nn.Conv2d):
-                nn.init.kaiming_normal_(m.weight,
-                                        mode='fan_out',
-                                        nonlinearity='relu')
-            elif isinstance(m, nn.BatchNorm2d):
-                nn.init.constant_(m.weight, 1)
-                nn.init.constant_(m.bias, 0)
-
         self.load_state_dict(model_zoo.load_url(model_urls['resnet50']),
                              strict=False)
 
