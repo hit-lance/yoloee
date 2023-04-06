@@ -1,10 +1,7 @@
 import torch
 import torch.nn as nn
-import torch.nn.functional as F
+from backbone.resnet import ResNet50, resnet50
 from utils.modules import Conv, reorg_layer
-from backbone import build_backbone
-import numpy as np
-import tools
 
 
 class YOLOv2R50(nn.Module):
@@ -26,7 +23,7 @@ class YOLOv2R50(nn.Module):
         self.grid_cell, self.all_anchor_wh = self.create_grid(input_size)
 
         # backbone
-        self.backbone = build_backbone(model_name='resnet50', pretrained=True)
+        self.backbone = ResNet50()
 
         # head
         self.convsets_1 = nn.Sequential(Conv(2048, 1024, k=1),

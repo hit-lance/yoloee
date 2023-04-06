@@ -256,7 +256,7 @@ def train():
 
             # forward
             conf_pred, cls_pred, reg_pred, box_pred = model(images)
-            
+
             x1y1x2y2_pred = (box_pred / train_size).view(-1, 4)
             x1y1x2y2_gt = targets[:, :, 7:].view(-1, 4)
             reg_pred = reg_pred.view(batch_size, -1, 4)
@@ -285,11 +285,6 @@ def train():
                              total_loss=total_loss)
 
             loss_dict_reduced = loss_dict
-
-            # check NAN for loss
-            if torch.isnan(total_loss):
-                print('loss is nan !!')
-                continue
 
             # backprop
             total_loss.backward()
@@ -339,50 +334,39 @@ def train():
                 t0 = time.time()
 
         # evaluation
-        
+
         if (epoch % args.eval_epoch) == 0 or (epoch == max_epoch - 1):
             if args.ema:
                 model_eval = ema.ema
             else:
                 model_eval = model
 
-            # check evaluator
-            if evaluator is None:
-                print('No evaluator ... save model and go on training.')
-                print('Saving state, epoch: {}'.format(epoch + 1))
-                weight_name = '{}_epoch_{}.pth'.format(
-                    args.version, epoch + 1)
+            print('eval ...')
+            # set eval mode
+            model_eval.training = False
+            model_eval.set_grid(val_size)
+
+            # evaluate
+            evaluator.evaluate(model_eval)
+
+            cur_map = evaluator.map
+            if cur_map > best_map:
+                # update best-map
+                best_map = cur_map
+                # save model
+                print('Saving state, epoch:', epoch + 1)
+                weight_name = '{}_epoch_{}_{:.2f}.pth'.format(
+                    args.version, epoch + 1, best_map * 100)
                 checkpoint_path = os.path.join(path_to_save, weight_name)
                 torch.save(model_eval.state_dict(), checkpoint_path)
 
-            else:
-                print('eval ...')
-                # set eval mode
-                model_eval.training = False
-                model_eval.set_grid(val_size)
+            if args.tfboard:
+                tblogger.add_scalar('07test/mAP', evaluator.map, epoch)
 
-                # evaluate
-                evaluator.evaluate(model_eval)
-
-                cur_map = evaluator.map
-                if cur_map > best_map:
-                    # update best-map
-                    best_map = cur_map
-                    # save model
-                    print('Saving state, epoch:', epoch + 1)
-                    weight_name = '{}_epoch_{}_{:.2f}.pth'.format(
-                        args.version, epoch + 1, best_map * 100)
-                    checkpoint_path = os.path.join(path_to_save,
-                                                    weight_name)
-                    torch.save(model_eval.state_dict(), checkpoint_path)
-
-                if args.tfboard:
-                    tblogger.add_scalar('07test/mAP', evaluator.map, epoch)
-
-                # set train mode.
-                model_eval.training = True
-                model_eval.set_grid(train_size)
-                model_eval.train()
+            # set train mode.
+            model_eval.training = True
+            model_eval.set_grid(train_size)
+            model_eval.train()
 
     if args.tfboard:
         tblogger.close()
