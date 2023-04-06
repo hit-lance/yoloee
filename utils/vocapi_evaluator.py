@@ -76,7 +76,7 @@ class VOCAPIEvaluator():
                     cls_pred[0], dim=-1)
 
                 # normalize bbox
-                bboxes = torch.clamp(box_pred[0] / h, 0., 1.)
+                bboxes = torch.clamp(box_pred[0] / im.shape[-1], 0., 1.)
 
                 # to cpu
                 scores = scores.to('cpu').numpy()

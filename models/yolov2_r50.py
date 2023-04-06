@@ -26,8 +26,7 @@ class YOLOv2R50(nn.Module):
         self.grid_cell, self.all_anchor_wh = self.create_grid(input_size)
 
         # backbone
-        self.backbone = build_backbone(model_name='resnet50',
-                                       pretrained=training)
+        self.backbone = build_backbone(model_name='resnet50', pretrained=True)
 
         # head
         self.convsets_1 = nn.Sequential(Conv(2048, 1024, k=1),
