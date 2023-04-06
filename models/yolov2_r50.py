@@ -1,6 +1,6 @@
 import torch
 import torch.nn as nn
-from backbone.resnet import ResNet50, resnet50
+from backbone.resnet import ResNet50
 from utils.modules import Conv, reorg_layer
 
 
