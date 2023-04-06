@@ -97,7 +97,7 @@ class YOLOv2R50(nn.Module):
 
         return x1y1x2y2_pred
 
-    def forward(self, x, target=None):
+    def forward(self, x):
         # backbone
         feats = self.backbone(x)
 
