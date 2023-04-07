@@ -7,12 +7,13 @@
 import torch
 from torch.autograd import Variable
 from data.voc0712 import VOCDetection, VOC_CLASSES
-import sys
 import os
 import time
 import numpy as np
 import pickle
 import xml.etree.ElementTree as ET
+
+from utils.anchor import decode_boxes, set_grid
 
 
 class VOCAPIEvaluator():
@@ -21,6 +22,7 @@ class VOCAPIEvaluator():
     def __init__(self,
                  data_root,
                  img_size,
+                 anchor_size,
                  device,
                  transform,
                  set_type='test',
@@ -28,12 +30,15 @@ class VOCAPIEvaluator():
                  display=False):
         self.data_root = data_root
         self.img_size = img_size
+        self.anchor_size = anchor_size
         self.device = device
         self.transform = transform
         self.labelmap = VOC_CLASSES
         self.set_type = set_type
         self.year = year
         self.display = display
+        self.grid_cell, self.all_anchor_wh = set_grid(img_size, anchor_size,
+                                                      device)
 
         # path
         self.devkit_path = data_root + 'VOC' + year
@@ -69,7 +74,9 @@ class VOCAPIEvaluator():
                 x = Variable(im.unsqueeze(0)).to(self.device)
                 t0 = time.time()
                 # forward
-                conf_pred, cls_pred, _, box_pred = net(x)
+                conf_pred, cls_pred, reg_pred = net(x)
+                box_pred = decode_boxes(reg_pred, self.grid_cell,
+                                        self.all_anchor_wh)
 
                 # score
                 scores = torch.sigmoid(conf_pred[0]) * torch.softmax(

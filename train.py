@@ -16,6 +16,7 @@ from data import config
 from data import BaseTransform, detection_collate
 
 import tools
+from utils.anchor import decode_boxes, set_grid
 
 from utils.com_paras_flops import FLOPs_and_Params
 from utils.augmentations import SSDAugmentation
@@ -135,23 +136,17 @@ def train():
     dataset = VOCDetection(data_dir=data_dir,
                            transform=SSDAugmentation(train_size))
 
-    evaluator = VOCAPIEvaluator(data_root=data_dir,
-                                img_size=val_size,
-                                device=device,
-                                transform=BaseTransform(val_size))
-
     print('Training model on:', dataset.name)
     print('The dataset size:', len(dataset))
     print("----------------------------------------------------------")
 
     # build model
     anchor_size = cfg['anchor_size_voc']
-    net = YOLOv2R50(device=device,
-                    input_size=train_size,
-                    num_classes=num_classes,
-                    anchor_size=anchor_size)
+    net = YOLOv2R50(device=device, num_classes=num_classes)
     model = net
     model = model.to(device).train()
+
+    grid_cell, all_anchor_wh = set_grid(train_size, anchor_size, device)
 
     # compute FLOPs and Params
     model_copy = deepcopy(model)
@@ -226,7 +221,8 @@ def train():
                 # randomly choose a new size
                 r = cfg['random_size_range']
                 train_size = random.randint(r[0], r[1]) * 32
-                model.set_grid(train_size)
+                grid_cell, all_anchor_wh = set_grid(train_size, anchor_size,
+                                                    device)
 
             if args.multi_scale:
                 # interpolate
@@ -252,7 +248,9 @@ def train():
             targets = torch.tensor(targets).float().to(device)
 
             # forward
-            conf_pred, cls_pred, reg_pred, box_pred = model(images)
+            conf_pred, cls_pred, reg_pred = model(images)
+
+            box_pred = decode_boxes(reg_pred, grid_cell, all_anchor_wh)
 
             x1y1x2y2_pred = (box_pred / train_size).view(-1, 4)
             x1y1x2y2_gt = targets[:, :, 7:].view(-1, 4)
@@ -331,6 +329,11 @@ def train():
                 t0 = time.time()
 
         # evaluation
+        evaluator = VOCAPIEvaluator(data_root=data_dir,
+                                    img_size=val_size,
+                                    anchor_size=anchor_size,
+                                    device=device,
+                                    transform=BaseTransform(val_size))
 
         if (epoch % args.eval_epoch) == 0 or (epoch == max_epoch - 1):
             if args.ema:
@@ -339,8 +342,6 @@ def train():
                 model_eval = model
 
             print('eval ...')
-            # set eval mode
-            model_eval.set_grid(val_size)
 
             # evaluate
             evaluator.evaluate(model_eval)
@@ -359,8 +360,6 @@ def train():
             if args.tfboard:
                 tblogger.add_scalar('07test/mAP', evaluator.map, epoch)
 
-            # set train mode.
-            model_eval.set_grid(train_size)
             model_eval.train()
 
     if args.tfboard:
