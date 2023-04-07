@@ -10,17 +10,14 @@ class YOLOv2R50(nn.Module):
                  device,
                  input_size=None,
                  num_classes=20,
-                 training=False,
                  anchor_size=None,
                  ):
         super(YOLOv2R50, self).__init__()
         self.device = device
-        self.input_size = input_size
         self.num_classes = num_classes
-        self.training = training
         self.anchor_size = torch.tensor(anchor_size)
         self.num_anchors = len(anchor_size)
-        self.grid_cell, self.all_anchor_wh = self.create_grid(input_size)
+        self.set_grid(input_size)
 
         # backbone
         self.backbone = ResNet50()
@@ -46,38 +43,17 @@ class YOLOv2R50(nn.Module):
         bias_value = -torch.log(torch.tensor((1. - init_prob) / init_prob))
         nn.init.constant_(self.pred.bias[..., :self.num_anchors], bias_value)
 
-    def create_grid(self, input_size):
+    def set_grid(self, input_size):
         w, h = input_size, input_size
         # generate grid cells
         ws, hs = w // 32, h // 32
         grid_y, grid_x = torch.meshgrid([torch.arange(hs), torch.arange(ws)])
         grid_xy = torch.stack([grid_x, grid_y], dim=-1).float()
-        grid_xy = grid_xy.view(1, hs * ws, 1, 2).to(self.device)
+        self.grid_cell = grid_xy.view(1, hs * ws, 1, 2).to(self.device)
 
         # generate anchor_wh tensor
-        anchor_wh = self.anchor_size.repeat(hs * ws, 1,
-                                            1).unsqueeze(0).to(self.device)
-
-        return grid_xy, anchor_wh
-
-    def set_grid(self, input_size):
-        self.input_size = input_size
-        self.grid_cell, self.all_anchor_wh = self.create_grid(input_size)
-
-    def decode_xywh(self, txtytwth_pred):
-        """
-            Input: \n
-                txtytwth_pred : [B, H*W, anchor_n, 4] \n
-            Output: \n
-                xywh_pred : [B, H*W*anchor_n, 4] \n
-        """
-        B, HW, ab_n, _ = txtytwth_pred.size()
-        xy_pred = torch.sigmoid(txtytwth_pred[:, :, :, :2]) + self.grid_cell
-        wh_pred = torch.exp(txtytwth_pred[:, :, :, 2:]) * self.all_anchor_wh
-        # [H*W, anchor_n, 4] -> [H*W*anchor_n, 4]
-        xywh_pred = torch.cat([xy_pred, wh_pred], -1).view(B, -1, 4) * 32
-
-        return xywh_pred
+        self.all_anchor_wh = self.anchor_size.repeat(
+            hs * ws, 1, 1).unsqueeze(0).to(self.device)
 
     def decode_boxes(self, txtytwth_pred):
         """
@@ -87,7 +63,11 @@ class YOLOv2R50(nn.Module):
                 x1y1x2y2_pred : [B, H*W*anchor_n, 4] \n
         """
         # txtytwth -> cxcywh
-        xywh_pred = self.decode_xywh(txtytwth_pred)
+        B, HW, ab_n, _ = txtytwth_pred.size()
+        xy_pred = torch.sigmoid(txtytwth_pred[:, :, :, :2]) + self.grid_cell
+        wh_pred = torch.exp(txtytwth_pred[:, :, :, 2:]) * self.all_anchor_wh
+        # [H*W, anchor_n, 4] -> [H*W*anchor_n, 4]
+        xywh_pred = torch.cat([xy_pred, wh_pred], -1).view(B, -1, 4) * 32
 
         # cxcywh -> x1y1x2y2
         x1y1x2y2_pred = torch.zeros_like(xywh_pred)

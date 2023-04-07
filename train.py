@@ -149,17 +149,14 @@ def train():
     net = YOLOv2R50(device=device,
                     input_size=train_size,
                     num_classes=num_classes,
-                    training=True,
                     anchor_size=anchor_size)
     model = net
     model = model.to(device).train()
 
     # compute FLOPs and Params
     model_copy = deepcopy(model)
-    model_copy.training = False
     model_copy.eval()
     FLOPs_and_Params(model=model_copy, size=train_size, device=device)
-    model_copy.training = True
     model_copy.train()
 
     batch_size = args.batch_size
@@ -343,7 +340,6 @@ def train():
 
             print('eval ...')
             # set eval mode
-            model_eval.training = False
             model_eval.set_grid(val_size)
 
             # evaluate
@@ -364,7 +360,6 @@ def train():
                 tblogger.add_scalar('07test/mAP', evaluator.map, epoch)
 
             # set train mode.
-            model_eval.training = True
             model_eval.set_grid(train_size)
             model_eval.train()
 
