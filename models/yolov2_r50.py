@@ -6,9 +6,8 @@ from utils.modules import Conv, reorg_layer
 
 class YOLOv2R50(nn.Module):
 
-    def __init__(self, device, num_classes=20, num_anchors=5):
+    def __init__(self, num_classes=20, num_anchors=5):
         super(YOLOv2R50, self).__init__()
-        self.device = device
         self.num_classes = num_classes
         self.num_anchors = num_anchors
 

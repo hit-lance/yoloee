@@ -142,17 +142,11 @@ def train():
 
     # build model
     anchor_size = cfg['anchor_size_voc']
-    net = YOLOv2R50(device=device, num_classes=num_classes)
+    net = YOLOv2R50(num_classes=num_classes)
     model = net
     model = model.to(device).train()
 
     grid_cell, all_anchor_wh = set_grid(train_size, anchor_size, device)
-
-    # compute FLOPs and Params
-    model_copy = deepcopy(model)
-    model_copy.eval()
-    FLOPs_and_Params(model=model_copy, size=train_size, device=device)
-    model_copy.train()
 
     batch_size = args.batch_size
 
