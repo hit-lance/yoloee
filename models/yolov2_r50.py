@@ -36,11 +36,11 @@ class YOLOv2R50(nn.Module):
 
     def forward(self, x):
         # backbone
-        feats = self.backbone(x)
+        inters = self.backbone(x)
 
         # reorg layer
-        p5 = self.convsets_1(feats['layer3'])
-        p4 = self.reorg(self.route_layer(feats['layer2']))
+        p5 = self.convsets_1(inters[4])
+        p4 = self.reorg(self.route_layer(inters[3]))
         p5 = torch.cat([p4, p5], dim=1)
 
         # head

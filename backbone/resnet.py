@@ -108,22 +108,15 @@ class ResNet50(nn.Module):
         return nn.Sequential(*layers)
 
     def forward(self, x):
-        c1 = self.conv1(x)
-        c1 = self.bn1(c1)
-        c1 = self.relu(c1)
-        c1 = self.maxpool(c1)
+        inter1 = self.conv1(x)
+        inter1 = self.bn1(inter1)
+        inter1 = self.relu(inter1)
+        inter1 = self.maxpool(inter1)
 
-        c2 = self.layer1(c1)
-        
-        c2 = self.layer2[0](c2)
+        inter1 = self.layer1(inter1)
+        inter2 = self.layer2[0](inter1)
+        inter3 = self.layer3[0](self.layer2[1](inter2))
+        inter4 = self.layer3[1](inter3)
+        inter5 = self.layer4(inter4)
 
-        c3 = self.layer2[1](c2)
-        c3 = self.layer3[0](c3)
-
-        c4 = self.layer3[1](c3)
-        
-        c5 = self.layer4(c4)
-
-        output = {'layer1': c3, 'layer2': c4, 'layer3': c5}
-
-        return output
+        return inter1, inter2, inter3, inter4, inter5
