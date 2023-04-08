@@ -76,25 +76,32 @@ class ResNet50(nn.Module):
         self.relu = nn.ReLU(inplace=True)
         self.maxpool = nn.MaxPool2d(kernel_size=3, stride=2, padding=1)
         self.layer1 = self._make_layer(Bottleneck, 64, 3)
-        self.layer2 = self._make_layer(Bottleneck, 128, 4, stride=2)
-        self.layer3 = self._make_layer(Bottleneck, 256, 6, stride=2)
+        self.layer2 = nn.Sequential(
+            self._make_layer(Bottleneck, 128, 3, stride=2),
+            self._make_layer(Bottleneck, 128, 1, stride=2, ds=False))
+        self.layer3 = nn.Sequential(
+            self._make_layer(Bottleneck, 256, 2, stride=2),
+            self._make_layer(Bottleneck, 256, 4, stride=2, ds=False))
         self.layer4 = self._make_layer(Bottleneck, 512, 3, stride=2)
 
         self.load_state_dict(model_zoo.load_url(
             'https://download.pytorch.org/models/resnet50-19c8e357.pth'),
                              strict=False)
 
-    def _make_layer(self, block, planes, blocks, stride=1):
-        downsample = None
-        if stride != 1 or self.inplanes != planes * block.expansion:
-            downsample = nn.Sequential(
-                conv1x1(self.inplanes, planes * block.expansion, stride),
-                nn.BatchNorm2d(planes * block.expansion),
-            )
-
+    def _make_layer(self, block, planes, blocks, stride=1, ds=True):
         layers = []
-        layers.append(block(self.inplanes, planes, stride, downsample))
-        self.inplanes = planes * block.expansion
+        if ds:
+            downsample = None
+            if stride != 1 or self.inplanes != planes * block.expansion:
+                downsample = nn.Sequential(
+                    conv1x1(self.inplanes, planes * block.expansion, stride),
+                    nn.BatchNorm2d(planes * block.expansion),
+                )
+            layers.append(block(self.inplanes, planes, stride, downsample))
+            self.inplanes = planes * block.expansion
+        else:
+            layers.append(block(self.inplanes, planes))
+
         for _ in range(1, blocks):
             layers.append(block(self.inplanes, planes))
 
@@ -107,8 +114,14 @@ class ResNet50(nn.Module):
         c1 = self.maxpool(c1)
 
         c2 = self.layer1(c1)
-        c3 = self.layer2(c2)
-        c4 = self.layer3(c3)
+        
+        c2 = self.layer2[0](c2)
+
+        c3 = self.layer2[1](c2)
+        c3 = self.layer3[0](c3)
+
+        c4 = self.layer3[1](c3)
+        
         c5 = self.layer4(c4)
 
         output = {'layer1': c3, 'layer2': c4, 'layer3': c5}
