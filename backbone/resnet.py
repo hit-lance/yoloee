@@ -82,9 +82,7 @@ class ResNet50(nn.Module):
 
         state_dict = model_zoo.load_url(
             'https://download.pytorch.org/models/resnet50-19c8e357.pth')
-
         del state_dict['fc.weight'], state_dict['fc.bias']
-
         self.load_state_dict(state_dict, strict=True)
 
     def _make_layer(self, block, planes, blocks, stride=1):

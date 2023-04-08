@@ -1,7 +1,7 @@
 import torch
 import torch.nn as nn
 from backbone.resnet import ResNet50
-from utils.modules import Conv, reorg_layer
+from utils.modules import CBL, reorg_layer
 
 
 class YOLOv2R50(nn.Module):
@@ -15,15 +15,16 @@ class YOLOv2R50(nn.Module):
         self.backbone = ResNet50()
 
         # head
-        self.convsets_1 = nn.Sequential(Conv(2048, 1024, k=1),
-                                        Conv(1024, 1024, k=3, p=1))
+        self.convsets_1 = nn.Sequential(
+            CBL(2048, 1024, kernel_size=1),
+            CBL(1024, 1024, kernel_size=3, padding=1))
 
         # reorg
-        self.route_layer = Conv(1024, 128, k=1)
+        self.route_layer = CBL(1024, 128, kernel_size=1)
         self.reorg = reorg_layer(stride=2)
 
         # head
-        self.convsets_2 = Conv(1024 + 128 * 4, 1024, k=3, p=1)
+        self.convsets_2 = CBL(1024 + 128 * 4, 1024, kernel_size=3, padding=1)
 
         # pred
         self.pred = nn.Conv2d(1024,
