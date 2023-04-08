@@ -6,7 +6,6 @@ import argparse
 import time
 import cv2
 import numpy as np
-from copy import deepcopy
 
 import torch
 import torch.optim as optim
@@ -18,7 +17,6 @@ from data import BaseTransform, detection_collate
 import tools
 from utils.anchor import decode_boxes, set_grid
 
-from utils.com_paras_flops import FLOPs_and_Params
 from utils.augmentations import SSDAugmentation
 from utils.vocapi_evaluator import VOCAPIEvaluator
 from utils.modules import ModelEMA

@@ -16,7 +16,6 @@ class YOLOv2R50(nn.Module):
 
         # head
         self.convsets_1 = nn.Sequential(Conv(2048, 1024, k=1),
-                                        Conv(1024, 1024, k=3, p=1),
                                         Conv(1024, 1024, k=3, p=1))
 
         # reorg
