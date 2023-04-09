@@ -15,6 +15,7 @@ class YOLOv2R50(nn.Module):
         self.backbone = ResNet50()
 
         # head
+        # self.convsets_1 = nn.Sequential(CBL(2048, 1024, kernel_size=1))
         self.convsets_1 = nn.Sequential(
             CBL(2048, 1024, kernel_size=1),
             CBL(1024, 1024, kernel_size=3, padding=1))
@@ -30,10 +31,6 @@ class YOLOv2R50(nn.Module):
         self.pred = nn.Conv2d(1024,
                               self.num_anchors * (1 + 4 + self.num_classes), 1)
 
-        # init bias
-        init_prob = 0.01
-        bias_value = -torch.log(torch.tensor((1. - init_prob) / init_prob))
-        nn.init.constant_(self.pred.bias[..., :self.num_anchors], bias_value)
 
     def forward(self, x):
         # backbone
@@ -50,21 +47,4 @@ class YOLOv2R50(nn.Module):
         # pred
         pred = self.pred(p5)
 
-        B, abC, H, W = pred.size()
-
-        # [B, num_anchor * C, H, W] -> [B, H, W, num_anchor * C] -> [B, H*W, num_anchor*C]
-        pred = pred.permute(0, 2, 3, 1).contiguous().view(B, H * W, abC)
-
-        # [B, H*W*num_anchor, 1]
-        conf_pred = pred[:, :, :1 * self.num_anchors].contiguous().view(
-            B, H * W * self.num_anchors, 1)
-        # [B, H*W, num_anchor, num_cls]
-        cls_pred = pred[:, :, 1 * self.num_anchors:(1 + self.num_classes) *
-                        self.num_anchors].contiguous().view(
-                            B, H * W * self.num_anchors, self.num_classes)
-        # [B, H*W, num_anchor, 4]
-        reg_pred = pred[:, :, (1 + self.num_classes) *
-                        self.num_anchors:].contiguous()
-        reg_pred = reg_pred.view(B, H * W, self.num_anchors, 4)
-
-        return conf_pred, cls_pred, reg_pred
+        return pred

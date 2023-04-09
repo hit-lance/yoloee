@@ -9,3 +9,5 @@ log
 data/VOC*
 nohup*
 t.py
+runs
+summary*

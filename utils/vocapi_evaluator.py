@@ -12,6 +12,7 @@ import time
 import numpy as np
 import pickle
 import xml.etree.ElementTree as ET
+from utils import divide
 
 from utils.anchor import decode_boxes, set_grid
 
@@ -74,16 +75,17 @@ class VOCAPIEvaluator():
                 x = Variable(im.unsqueeze(0)).to(self.device)
                 t0 = time.time()
                 # forward
-                conf_pred, cls_pred, reg_pred = net(x)
-                box_pred = decode_boxes(reg_pred, self.grid_cell,
-                                        self.all_anchor_wh)
+                pred = net(x)
+                conf_pred, cls_pred, reg_pred = divide(pred)
+                bbox_pred = decode_boxes(reg_pred, self.grid_cell,
+                                         self.all_anchor_wh)
 
                 # score
                 scores = torch.sigmoid(conf_pred[0]) * torch.softmax(
                     cls_pred[0], dim=-1)
 
                 # normalize bbox
-                bboxes = torch.clamp(box_pred[0] / im.shape[-1], 0., 1.)
+                bboxes = torch.clamp(bbox_pred[0] / im.shape[-1], 0., 1.)
 
                 # to cpu
                 scores = scores.to('cpu').numpy()

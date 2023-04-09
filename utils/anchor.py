@@ -10,7 +10,8 @@ def set_grid(input_size, anchor_size, device):
     grid_cell = grid_xy.view(1, hs * ws, 1, 2).to(device)
 
     # generate anchor_wh tensor
-    all_anchor_wh = torch.tensor(anchor_size).repeat(hs * ws, 1, 1).unsqueeze(0).to(device)
+    all_anchor_wh = torch.tensor(anchor_size).repeat(hs * ws, 1,
+                                                     1).unsqueeze(0).to(device)
 
     return grid_cell, all_anchor_wh
 
@@ -24,6 +25,7 @@ def decode_boxes(txtytwth_pred, grid_cell, all_anchor_wh):
     """
     # txtytwth -> cxcywh
     B = txtytwth_pred.size()[0]
+    txtytwth_pred = txtytwth_pred.view(B, -1, all_anchor_wh.size()[2], 4)
     xy_pred = torch.sigmoid(txtytwth_pred[:, :, :, :2]) + grid_cell
     wh_pred = torch.exp(txtytwth_pred[:, :, :, 2:]) * all_anchor_wh
     # [H*W, anchor_n, 4] -> [H*W*anchor_n, 4]
@@ -36,4 +38,3 @@ def decode_boxes(txtytwth_pred, grid_cell, all_anchor_wh):
     x1y1x2y2_pred = torch.cat([x1y1_pred, x2y2_pred], dim=-1)
 
     return x1y1x2y2_pred
-

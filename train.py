@@ -15,6 +15,7 @@ from data import config
 from data import BaseTransform, detection_collate
 
 import tools
+from utils import divide
 from utils.anchor import decode_boxes, set_grid
 
 from utils.augmentations import SSDAugmentation
@@ -240,13 +241,14 @@ def train():
             targets = torch.tensor(targets).float().to(device)
 
             # forward
-            conf_pred, cls_pred, reg_pred = model(images)
+            pred = model(images)
+            conf_pred, cls_pred, reg_pred = divide(pred)
 
-            box_pred = decode_boxes(reg_pred, grid_cell, all_anchor_wh)
+            bbox_pred = decode_boxes(reg_pred, grid_cell, all_anchor_wh)
 
-            x1y1x2y2_pred = (box_pred / train_size).view(-1, 4)
+            x1y1x2y2_pred = (bbox_pred / train_size).view(-1, 4)
             x1y1x2y2_gt = targets[:, :, 7:].view(-1, 4)
-            reg_pred = reg_pred.view(batch_size, -1, 4)
+            # reg_pred = reg_pred.view(batch_size, -1, 4)
 
             # set conf target
             iou_pred = tools.iou_score(x1y1x2y2_pred,
