@@ -56,8 +56,8 @@ class VOCAPIEvaluator():
                                     image_sets=[('2007', set_type)],
                                     transform=transform)
 
-    def evaluate(self, net):
-        net.eval()
+    def evaluate(self, model):
+        model.eval()
         num_images = len(self.dataset)
         # all detections are collected into:
         #    all_boxes[cls][image] = N x 5 array of detections in
@@ -75,7 +75,7 @@ class VOCAPIEvaluator():
                 x = Variable(im.unsqueeze(0)).to(self.device)
                 t0 = time.time()
                 # forward
-                pred = net(x)
+                pred = model(x)
                 conf_pred, cls_pred, reg_pred = divide(pred)
                 bbox_pred = decode_boxes(reg_pred, self.grid_cell,
                                          self.all_anchor_wh)
@@ -147,7 +147,7 @@ class VOCAPIEvaluator():
     def get_output_dir(self, name, phase):
         """Return the directory where experimental artifacts are placed.
         If the directory does not exist, it is created.
-        A canonical path is built using the name from an imdb and a network
+        A canonical path is built using the name from an imdb and a modelwork
         (if not None).
         """
         filedir = os.path.join(name, phase)
