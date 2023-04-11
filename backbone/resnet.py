@@ -1,6 +1,5 @@
 import torch.nn as nn
 import torch.utils.model_zoo as model_zoo
-from torchinfo import summary
 
 __all__ = ['resnet50']
 
