@@ -11,10 +11,11 @@ class CBL(nn.Module):
                  out_channels,
                  kernel_size=1,
                  stride=1,
-                 padding=0):
+                 padding=0,
+                 dilation=1):
         super(CBL, self).__init__()
         self.conv = nn.Conv2d(in_channels, out_channels, kernel_size, stride,
-                              padding)
+                              padding, dilation)
         self.bn = nn.BatchNorm2d(out_channels)
         self.relu = nn.LeakyReLU(0.1, inplace=True)
 

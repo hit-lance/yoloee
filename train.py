@@ -23,6 +23,7 @@ from utils.vocapi_evaluator import VOCAPIEvaluator
 from utils.modules import ModelEMA
 
 from models.yolov2_r50 import YOLOv2R50
+from val import val
 
 
 def parse_args():
@@ -140,7 +141,7 @@ def train():
     print("----------------------------------------------------------")
 
     # build model
-    anchor_size = cfg['anchor_size_voc']
+    anchor_size = cfg['anchor_size']
     net = YOLOv2R50(num_classes=num_classes)
     model = net
     model = model.to(device).train()
@@ -188,7 +189,7 @@ def train():
     t0 = time.time()
     # start training loop
     for epoch in range(max_epoch):
-
+        model.train()
         # use step lr
         if epoch in cfg['lr_epoch']:
             tmp_lr = tmp_lr * 0.1
@@ -241,36 +242,48 @@ def train():
             targets = torch.tensor(targets).float().to(device)
 
             # forward
-            pred = model(images)
-            conf_pred, cls_pred, reg_pred = divide(pred)
-
-            bbox_pred = decode_boxes(reg_pred, grid_cell, all_anchor_wh)
-
-            x1y1x2y2_pred = (bbox_pred / train_size).view(-1, 4)
+            preds = model(images)
+            total_conf_loss = torch.tensor(0.0, requires_grad=True).to(device)
+            total_cls_loss = torch.tensor(0.0, requires_grad=True).to(device)
+            total_box_loss = torch.tensor(0.0, requires_grad=True).to(device)
+            total_iou_loss = torch.tensor(0.0, requires_grad=True).to(device)
+            threshold = 0.067
             x1y1x2y2_gt = targets[:, :, 7:].view(-1, 4)
-            # reg_pred = reg_pred.view(batch_size, -1, 4)
+            for pred in preds:
+                conf_pred, cls_pred, reg_pred = divide(pred)
 
-            # set conf target
-            iou_pred = tools.iou_score(x1y1x2y2_pred,
-                                       x1y1x2y2_gt).view(batch_size, -1, 1)
-            gt_conf = iou_pred.clone().detach()
+                bbox_pred = decode_boxes(reg_pred, grid_cell, all_anchor_wh)
 
-            # [obj, cls, txtytwth, x1y1x2y2] -> [conf, obj, cls, txtytwth]
-            targets = torch.cat([gt_conf, targets[:, :, :7]], dim=2)
-            conf_loss, cls_loss, box_loss, iou_loss = tools.loss(
-                pred_conf=conf_pred,
-                pred_cls=cls_pred,
-                pred_txtytwth=reg_pred,
-                pred_iou=iou_pred,
-                label=targets)
+                x1y1x2y2_pred = (bbox_pred / train_size).view(-1, 4)
 
-            # compute loss
-            total_loss = conf_loss + cls_loss + box_loss + iou_loss
+                # reg_pred = reg_pred.view(batch_size, -1, 4)
+                # set conf target
+                iou_pred = tools.iou_score(x1y1x2y2_pred, x1y1x2y2_gt).view(
+                    batch_size, -1, 1)
+                gt_conf = iou_pred.clone().detach()
 
-            loss_dict = dict(conf_loss=conf_loss,
-                             cls_loss=cls_loss,
-                             box_loss=box_loss,
-                             iou_loss=iou_loss,
+                # [obj, cls, txtytwth, x1y1x2y2] -> [conf, obj, cls, txtytwth]
+                target = torch.cat([gt_conf, targets[:, :, :7]], dim=2)
+                conf_loss, cls_loss, box_loss, iou_loss = tools.loss(
+                    pred_conf=conf_pred,
+                    pred_cls=cls_pred,
+                    pred_txtytwth=reg_pred,
+                    pred_iou=iou_pred,
+                    label=target)
+
+                # compute loss
+                total_conf_loss += threshold * conf_loss
+                total_cls_loss += threshold * cls_loss
+                total_box_loss += threshold * box_loss
+                total_iou_loss += threshold * iou_loss
+                threshold += 0.067
+
+            total_loss = total_conf_loss + total_cls_loss + total_box_loss + total_iou_loss
+
+            loss_dict = dict(conf_loss=total_conf_loss,
+                             cls_loss=total_cls_loss,
+                             box_loss=total_box_loss,
+                             iou_loss=total_iou_loss,
                              total_loss=total_loss)
 
             loss_dict_reduced = loss_dict
@@ -323,11 +336,11 @@ def train():
                 t0 = time.time()
 
         # evaluation
-        evaluator = VOCAPIEvaluator(data_root=data_dir,
-                                    img_size=val_size,
-                                    anchor_size=anchor_size,
-                                    device=device,
-                                    transform=BaseTransform(val_size))
+        # evaluator = VOCAPIEvaluator(data_root=data_dir,
+        #                             img_size=val_size,
+        #                             anchor_size=anchor_size,
+        #                             device=device,
+        #                             transform=BaseTransform(val_size))
 
         if (epoch % args.eval_epoch) == 0 or (epoch == max_epoch - 1):
             if args.ema:
@@ -338,21 +351,27 @@ def train():
             print('eval ...')
 
             # evaluate
-            evaluator.evaluate(model_eval)
+            # evaluator.evaluate(model_eval)
+            mAPs = val(model, cfg['val_size'], cfg['anchor_size'], device)
+            print("val result")
+            print(mAPs)
 
-            cur_map = evaluator.map
-            if cur_map > best_map:
+            cur_map = 1
+            # cur_map = evaluator.map
+            # if cur_map > best_map:
+            if True:
                 # update best-map
                 best_map = cur_map
                 # save model
                 print('Saving state, epoch:', epoch + 1)
-                weight_name = '{}_epoch_{}_{:.2f}.pth'.format(
+                weight_name = 'new_{}_epoch_{}_{:.2f}.pth'.format(
                     args.version, epoch + 1, best_map * 100)
                 checkpoint_path = os.path.join(path_to_save, weight_name)
                 torch.save(model_eval.state_dict(), checkpoint_path)
 
             if args.tfboard:
-                tblogger.add_scalar('07test/mAP', evaluator.map, epoch)
+                for i, mAP in enumerate(mAPs):
+                    tblogger.add_scalar('07test/mAP' + str(i + 1), mAP, epoch)
 
             model_eval.train()
 

@@ -62,66 +62,73 @@ class VOCAPIEvaluator():
         # all detections are collected into:
         #    all_boxes[cls][image] = N x 5 array of detections in
         #    (x1, y1, x2, y2, score)
-        self.all_boxes = [[[] for _ in range(num_images)]
-                          for _ in range(len(self.labelmap))]
 
         # timers
         det_file = os.path.join(self.output_dir, 'detections.pkl')
 
+        all_boxes_list = []
+        for _ in range(5):
+            all_boxes_list.append([[[] for _ in range(num_images)]
+                                   for _ in range(len(self.labelmap))])
+
         with torch.no_grad():
+
             for i in range(num_images):
                 im, gt, h, w = self.dataset.pull_item(i)
 
                 x = Variable(im.unsqueeze(0)).to(self.device)
                 t0 = time.time()
                 # forward
-                pred = net(x)
-                conf_pred, cls_pred, reg_pred = divide(pred)
-                bbox_pred = decode_boxes(reg_pred, self.grid_cell,
-                                         self.all_anchor_wh)
+                preds = net(x)
 
-                # score
-                scores = torch.sigmoid(conf_pred[0]) * torch.softmax(
-                    cls_pred[0], dim=-1)
+                for ii, pred in enumerate(preds):
+                    conf_pred, cls_pred, reg_pred = divide(pred)
+                    bbox_pred = decode_boxes(reg_pred, self.grid_cell,
+                                             self.all_anchor_wh)
 
-                # normalize bbox
-                bboxes = torch.clamp(bbox_pred[0] / im.shape[-1], 0., 1.)
+                    # score
+                    scores = torch.sigmoid(conf_pred[0]) * torch.softmax(
+                        cls_pred[0], dim=-1)
 
-                # to cpu
-                scores = scores.to('cpu').numpy()
-                bboxes = bboxes.to('cpu').numpy()
+                    # normalize bbox
+                    bboxes = torch.clamp(bbox_pred[0] / im.shape[-1], 0., 1.)
 
-                # post-process
-                bboxes, scores, cls_inds = self.postprocess(bboxes, scores)
+                    # to cpu
+                    scores = scores.to('cpu').numpy()
+                    bboxes = bboxes.to('cpu').numpy()
 
-                detect_time = time.time() - t0
-                scale = np.array([[w, h, w, h]])
-                bboxes *= scale
+                    # post-process
+                    bboxes, scores, cls_inds = self.postprocess(bboxes, scores)
 
-                for j in range(len(self.labelmap)):
-                    inds = np.where(cls_inds == j)[0]
-                    if len(inds) == 0:
-                        self.all_boxes[j][i] = np.empty([0, 5],
-                                                        dtype=np.float32)
-                        continue
-                    c_bboxes = bboxes[inds]
-                    c_scores = scores[inds]
-                    c_dets = np.hstack(
-                        (c_bboxes, c_scores[:, np.newaxis])).astype(np.float32,
-                                                                    copy=False)
-                    self.all_boxes[j][i] = c_dets
+                    detect_time = time.time() - t0
+                    scale = np.array([[w, h, w, h]])
+                    bboxes *= scale
 
-                if i % 500 == 0:
-                    print('im_detect: {:d}/{:d} {:.3f}s'.format(
-                        i + 1, num_images, detect_time))
+                    for j in range(len(self.labelmap)):
+                        inds = np.where(cls_inds == j)[0]
+                        if len(inds) == 0:
+                            all_boxes_list[ii][j][i] = np.empty(
+                                [0, 5], dtype=np.float32)
+                            continue
+                        c_bboxes = bboxes[inds]
+                        c_scores = scores[inds]
+                        c_dets = np.hstack(
+                            (c_bboxes,
+                             c_scores[:, np.newaxis])).astype(np.float32,
+                                                              copy=False)
+                        all_boxes_list[ii][j][i] = c_dets
 
-        with open(det_file, 'wb') as f:
-            pickle.dump(self.all_boxes, f, pickle.HIGHEST_PROTOCOL)
+                    all_boxes_list[ii].append(all_boxes_list[ii][j][i])
+                    if i % 500 == 0:
+                        print('im_detect: {:d}/{:d} {:.3f}s'.format(
+                            i + 1, num_images, detect_time))
 
-        print('Evaluating detections')
-        self.evaluate_detections(self.all_boxes)
+                    # with open(det_file, 'wb') as f:
+                    #     pickle.dump(self.all_boxes, f, pickle.HIGHEST_PROTOCOL)
 
-        print('Mean AP: ', self.map)
+        for all_boxes in all_boxes_list:
+            self.evaluate_detections(all_boxes)
+            print('Mean AP: ', self.map)
 
     def parse_rec(self, filename):
         """ Parse a PASCAL VOC xml file """
