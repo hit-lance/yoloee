@@ -400,7 +400,7 @@ def get_output_dir(name, phase):
     return filedir
 
 
-def nms(dets, scores):
+def nms(dets, scores, nms_thresh=0.5):
     """"Pure Python NMS baseline."""
     x1 = dets[:, 0]  # xmin
     y1 = dets[:, 1]  # ymin
@@ -426,13 +426,17 @@ def nms(dets, scores):
         # Cross Area / (bbox + particular area - Cross Area)
         ovr = inter / (areas[i] + areas[order[1:]] - inter)
         # reserve all the boundingbox whose ovr less than thresh
-        inds = np.where(ovr <= 0.5)[0]
+        inds = np.where(ovr <= nms_thresh)[0]
         order = order[inds + 1]
 
     return keep
 
 
-def postprocess(bboxes, scores, num_classes=20):
+def postprocess(bboxes,
+                scores,
+                num_classes=20,
+                conf_thresh=0.2,
+                nms_thresh=0.5):
     """
     bboxes: (HxW, 4), bsize = 1
     scores: (HxW, num_classes), bsize = 1
@@ -442,7 +446,7 @@ def postprocess(bboxes, scores, num_classes=20):
     scores = scores[(np.arange(scores.shape[0]), cls_inds)]
 
     # threshold
-    keep = np.where(scores >= 0.01)
+    keep = np.where(scores >= conf_thresh)
     bboxes = bboxes[keep]
     scores = scores[keep]
     cls_inds = cls_inds[keep]
@@ -455,7 +459,7 @@ def postprocess(bboxes, scores, num_classes=20):
             continue
         c_bboxes = bboxes[inds]
         c_scores = scores[inds]
-        c_keep = nms(c_bboxes, c_scores)
+        c_keep = nms(c_bboxes, c_scores, nms_thresh)
         keep[inds[c_keep]] = 1
 
     keep = np.where(keep > 0)

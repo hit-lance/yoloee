@@ -48,7 +48,7 @@ parser.add_argument('-d', '--dataset', default='voc', help='voc or coco')
 # visualize
 parser.add_argument('-vs',
                     '--visual_threshold',
-                    default=0.08,
+                    default=0.2,
                     type=float,
                     help='Final confidence threshold')
 parser.add_argument('--show',
@@ -68,7 +68,7 @@ def plot_bbox_labels(img, bbox, label=None, cls_color=None, text_scale=0.4):
 
     if label is not None:
         # plot title bbox
-        cv2.rectangle(img, (x1, y2 - t_size[1]//2),
+        cv2.rectangle(img, (x1, y2 - t_size[1] // 2),
                       (int(x1 + t_size[0] * text_scale), y2), cls_color, -1)
         # put the test on the title bbox
         cv2.putText(img,
@@ -88,7 +88,6 @@ def visualize(img, bboxes, scores, cls_inds, vis_thresh, class_colors,
         if scores[i] > vis_thresh:
             cls_id = int(cls_inds[i])
             cls_color = class_colors[cls_id]
-            print(class_names[cls_id])
             if len(class_names) > 1:
                 mess = '%s: %.2f' % (class_names[cls_id], scores[i])
             else:
@@ -110,7 +109,7 @@ def test(net,
     net.eval()
 
     num_images = len(dataset)
-    num_images = 3
+    # num_images = 3
     save_path = os.path.join('det_results/', args.dataset, args.version)
     os.makedirs(save_path, exist_ok=True)
 
@@ -135,6 +134,10 @@ def test(net,
             t0 = time.time()
             # forward
             preds = net(x)
+            i = 3
+            conf_thresh = 0.2
+            nms_thresh = 0.5
+
             for ii, pred in enumerate(preds):
                 conf_pred, cls_pred, reg_pred = divide(pred)
                 bbox_pred = decode_boxes(reg_pred, grid_cell, all_anchor_wh)
@@ -151,13 +154,16 @@ def test(net,
                 bboxes = bboxes.to('cpu').numpy()
 
                 # post-process
-                bboxes, scores, cls_inds = postprocess(bboxes, scores)
+                bboxes, scores, cls_inds = postprocess(bboxes,
+                                                       scores,
+                                                       conf_thresh=conf_thresh,
+                                                       nms_thresh=nms_thresh)
                 bboxess.append(bboxes)
                 scoress.append(scores)
                 cls_indss.append(cls_inds)
 
             print("detection time used ", time.time() - t0, "s")
-            bboxes, scores, cls_inds = bboxess[0], scoress[0], cls_indss[0]
+            bboxes, scores, cls_inds = bboxess[i], scoress[i], cls_indss[i]
 
             # rescale
             bboxes *= scale
