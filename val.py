@@ -8,7 +8,7 @@ import numpy as np
 import torch
 
 from data.voc0712 import VOC_CLASSES, VOCDetection
-from data import config, detection_collate
+from data import config
 from data import BaseTransform
 from utils import divide
 from utils.anchor import decode_boxes, set_grid
@@ -426,7 +426,7 @@ def nms(dets, scores):
         # Cross Area / (bbox + particular area - Cross Area)
         ovr = inter / (areas[i] + areas[order[1:]] - inter)
         # reserve all the boundingbox whose ovr less than thresh
-        inds = np.where(ovr <= 0.6)[0]
+        inds = np.where(ovr <= 0.5)[0]
         order = order[inds + 1]
 
     return keep
@@ -442,7 +442,7 @@ def postprocess(bboxes, scores):
     scores = scores[(np.arange(scores.shape[0]), cls_inds)]
 
     # threshold
-    keep = np.where(scores >= 0.001)
+    keep = np.where(scores >= 0.1)
     bboxes = bboxes[keep]
     scores = scores[keep]
     cls_inds = cls_inds[keep]

@@ -3,11 +3,15 @@ import argparse
 import torch
 import torch.backends.cudnn as cudnn
 from data.voc0712 import VOC_CLASSES, VOCDetection
-from data.coco2017 import COCODataset, coco_class_index, coco_class_labels
 from data import config, BaseTransform
 import numpy as np
 import cv2
 import time
+
+from models.yolov2_r50 import YOLOv2R50
+from utils import divide
+from utils.anchor import decode_boxes, set_grid
+from val import postprocess
 
 parser = argparse.ArgumentParser(description='YOLO Detection')
 # basic
@@ -40,10 +44,6 @@ parser.add_argument('--nms_thresh',
                     type=float,
                     help='NMS threshold')
 # dataset
-parser.add_argument('-root',
-                    '--data_root',
-                    default='/mnt/share/ssd2/dataset',
-                    help='dataset root')
 parser.add_argument('-d', '--dataset', default='voc', help='voc or coco')
 # visualize
 parser.add_argument('-vs',
@@ -53,7 +53,7 @@ parser.add_argument('-vs',
                     help='Final confidence threshold')
 parser.add_argument('--show',
                     action='store_true',
-                    default=False,
+                    default=True,
                     help='show the visulization results.')
 
 args = parser.parse_args()
@@ -120,45 +120,79 @@ def test(net,
          class_indexs=None,
          dataset_name='voc'):
 
+    net.eval()
+
     num_images = len(dataset)
+    num_images = 1
     save_path = os.path.join('det_results/', args.dataset, args.version)
     os.makedirs(save_path, exist_ok=True)
 
-    for index in range(num_images):
-        print('Testing image {:d}/{:d}....'.format(index + 1, num_images))
-        image, _ = dataset.pull_image(index)
-        h, w, _ = image.shape
-        scale = np.array([[w, h, w, h]])
+    grid_cell, all_anchor_wh = set_grid(416, anchor_size, device)
 
-        # to tensor
-        x = torch.from_numpy(transform(image)[0][:, :,
-                                                 (2, 1, 0)]).permute(2, 0, 1)
-        x = x.unsqueeze(0).to(device)
+    with torch.no_grad():
+        for index in range(num_images):
+            print('Testing image {:d}/{:d}....'.format(index + 1, num_images))
+            image, _ = dataset.pull_image(index)
+            h, w, _ = image.shape
+            scale = np.array([[w, h, w, h]])
+            bboxess = []
+            scoress = []
+            cls_indss = []
 
-        t0 = time.time()
-        # forward
-        bboxes, scores, cls_inds = net(x)
-        print("detection time used ", time.time() - t0, "s")
+            # to tensor
+            x = torch.from_numpy(transform(image)[0][:, :,
+                                                     (2, 1,
+                                                      0)]).permute(2, 0, 1)
+            x = x.unsqueeze(0).to(device)
 
-        # rescale
-        bboxes *= scale
+            t0 = time.time()
+            # forward
+            preds = net(x)
+            for ii, pred in enumerate(preds):
+                conf_pred, cls_pred, reg_pred = divide(pred)
+                bbox_pred = decode_boxes(reg_pred, grid_cell, all_anchor_wh)
 
-        # vis detection
-        img_processed = visualize(img=image,
-                                  bboxes=bboxes,
-                                  scores=scores,
-                                  cls_inds=cls_inds,
-                                  vis_thresh=vis_thresh,
-                                  class_colors=class_colors,
-                                  class_names=class_names,
-                                  class_indexs=class_indexs,
-                                  dataset_name=dataset_name)
-        if args.show:
-            cv2.imshow('detection', img_processed)
-            cv2.waitKey(0)
-        # save result
-        cv2.imwrite(os.path.join(save_path,
-                                 str(index).zfill(6) + '.jpg'), img_processed)
+                # score
+                scores = torch.sigmoid(conf_pred[0]) * torch.softmax(
+                    cls_pred[0], dim=-1)
+
+                # normalize bbox
+                bboxes = torch.clamp(bbox_pred[0] / image.shape[-1], 0., 1.)
+
+                # to cpu
+
+                scores = scores.to('cpu').numpy()
+                bboxes = bboxes.to('cpu').numpy()
+
+                # post-process
+                bboxes, scores, cls_inds = postprocess(bboxes, scores)
+                bboxess.append(bboxes)
+                scoress.append(scores)
+                cls_indss.append(cls_inds)
+
+            print("detection time used ", time.time() - t0, "s")
+            bboxes, scores, cls_inds = bboxess[4], scoress[4], cls_indss[4]
+
+            # rescale
+            bboxes *= scale
+
+            # vis detection
+            img_processed = visualize(img=image,
+                                      bboxes=bboxes,
+                                      scores=scores,
+                                      cls_inds=cls_inds,
+                                      vis_thresh=vis_thresh,
+                                      class_colors=class_colors,
+                                      class_names=class_names,
+                                      class_indexs=class_indexs,
+                                      dataset_name=dataset_name)
+            if args.show:
+                cv2.imshow('detection', img_processed)
+                cv2.waitKey(0)
+            # save result
+            cv2.imwrite(os.path.join(save_path,
+                                     str(index).zfill(6) + '.jpg'),
+                        img_processed)
 
 
 if __name__ == '__main__':
@@ -174,23 +208,12 @@ if __name__ == '__main__':
     input_size = args.input_size
 
     # dataset
-    if args.dataset == 'voc':
-        print('test on voc ...')
-        data_dir = os.path.join(args.data_root, 'VOCdevkit')
-        class_names = VOC_CLASSES
-        class_indexs = None
-        num_classes = 20
-        dataset = VOCDetection(root=data_dir, image_sets=[('2007', 'test')])
-
-    elif args.dataset == 'coco':
-        print('test on coco-val ...')
-        data_dir = os.path.join(args.data_root, 'COCO')
-        class_names = coco_class_labels
-        class_indexs = coco_class_index
-        num_classes = 80
-        dataset = COCODataset(data_dir=data_dir,
-                              json_file='instances_val2017.json',
-                              name='val2017')
+    print('test on voc ...')
+    data_dir = 'data/VOCdevkit'
+    class_names = VOC_CLASSES
+    class_indexs = None
+    num_classes = 20
+    dataset = VOCDetection(data_dir=data_dir, image_sets=[('2007', 'test')])
 
     class_colors = [(np.random.randint(255), np.random.randint(255),
                      np.random.randint(255)) for _ in range(num_classes)]
@@ -199,43 +222,16 @@ if __name__ == '__main__':
     model_name = args.version
     print('Model: ', model_name)
 
-    # load model and config file
-    if model_name == 'yolov2_d19':
-        from models.yolov2_d19 import YOLOv2D19 as yolo_net
-        cfg = config.yolov2_d19_cfg
-
-    elif model_name == 'yolov2_r50':
-        from models.yolov2_r50 import YOLOv2R50 as yolo_net
-        cfg = config.yolov2_r50_cfg
-
-    elif model_name == 'yolov3':
-        from models.yolov3 import YOLOv3 as yolo_net
-        cfg = config.yolov3_d53_cfg
-
-    elif model_name == 'yolov3_spp':
-        from models.yolov3_spp import YOLOv3Spp as yolo_net
-        cfg = config.yolov3_d53_cfg
-
-    elif model_name == 'yolov3_tiny':
-        from models.yolov3_tiny import YOLOv3tiny as yolo_net
-        cfg = config.yolov3_tiny_cfg
-    else:
-        print('Unknown model name...')
-        exit(0)
+    cfg = config.yolov2_r50_cfg
 
     # build model
     anchor_size = cfg['anchor_size'] if args.dataset == 'voc' else cfg[
         'anchor_size_coco']
-    net = yolo_net(device=device,
-                   input_size=input_size,
-                   num_classes=num_classes,
-                   trainable=False,
-                   conf_thresh=args.conf_thresh,
-                   nms_thresh=args.nms_thresh,
-                   anchor_size=anchor_size)
+    net = YOLOv2R50(num_classes=num_classes)
 
     # load weight
-    net.load_state_dict(torch.load(args.trained_model, map_location=device))
+    net.load_state_dict(
+        torch.load('yolov2_r50_epoch_250_75.48.pth', map_location=device))
     net.to(device).eval()
     print('Finished loading model!')
 
