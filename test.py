@@ -48,7 +48,7 @@ parser.add_argument('-d', '--dataset', default='voc', help='voc or coco')
 # visualize
 parser.add_argument('-vs',
                     '--visual_threshold',
-                    default=0.25,
+                    default=0.08,
                     type=float,
                     help='Final confidence threshold')
 parser.add_argument('--show',
@@ -68,11 +68,11 @@ def plot_bbox_labels(img, bbox, label=None, cls_color=None, text_scale=0.4):
 
     if label is not None:
         # plot title bbox
-        cv2.rectangle(img, (x1, y1 - t_size[1]),
-                      (int(x1 + t_size[0] * text_scale), y1), cls_color, -1)
+        cv2.rectangle(img, (x1, y2 - t_size[1]//2),
+                      (int(x1 + t_size[0] * text_scale), y2), cls_color, -1)
         # put the test on the title bbox
         cv2.putText(img,
-                    label, (int(x1), int(y1 - 5)),
+                    label, (int(x1), int(y2)),
                     0,
                     text_scale, (0, 0, 0),
                     1,
@@ -81,25 +81,14 @@ def plot_bbox_labels(img, bbox, label=None, cls_color=None, text_scale=0.4):
     return img
 
 
-def visualize(img,
-              bboxes,
-              scores,
-              cls_inds,
-              vis_thresh,
-              class_colors,
-              class_names,
-              class_indexs=None,
-              dataset_name='voc'):
+def visualize(img, bboxes, scores, cls_inds, vis_thresh, class_colors,
+              class_names):
     ts = 0.4
     for i, bbox in enumerate(bboxes):
         if scores[i] > vis_thresh:
             cls_id = int(cls_inds[i])
-            if dataset_name == 'coco':
-                cls_color = class_colors[cls_id]
-                cls_id = class_indexs[cls_id]
-            else:
-                cls_color = class_colors[cls_id]
-
+            cls_color = class_colors[cls_id]
+            print(class_names[cls_id])
             if len(class_names) > 1:
                 mess = '%s: %.2f' % (class_names[cls_id], scores[i])
             else:
@@ -116,14 +105,12 @@ def test(net,
          transform,
          vis_thresh,
          class_colors=None,
-         class_names=None,
-         class_indexs=None,
-         dataset_name='voc'):
+         class_names=None):
 
     net.eval()
 
     num_images = len(dataset)
-    num_images = 1
+    num_images = 3
     save_path = os.path.join('det_results/', args.dataset, args.version)
     os.makedirs(save_path, exist_ok=True)
 
@@ -157,10 +144,9 @@ def test(net,
                     cls_pred[0], dim=-1)
 
                 # normalize bbox
-                bboxes = torch.clamp(bbox_pred[0] / image.shape[-1], 0., 1.)
+                bboxes = torch.clamp(bbox_pred[0] / 416, 0., 1.)
 
                 # to cpu
-
                 scores = scores.to('cpu').numpy()
                 bboxes = bboxes.to('cpu').numpy()
 
@@ -171,7 +157,7 @@ def test(net,
                 cls_indss.append(cls_inds)
 
             print("detection time used ", time.time() - t0, "s")
-            bboxes, scores, cls_inds = bboxess[4], scoress[4], cls_indss[4]
+            bboxes, scores, cls_inds = bboxess[0], scoress[0], cls_indss[0]
 
             # rescale
             bboxes *= scale
@@ -183,9 +169,7 @@ def test(net,
                                       cls_inds=cls_inds,
                                       vis_thresh=vis_thresh,
                                       class_colors=class_colors,
-                                      class_names=class_names,
-                                      class_indexs=class_indexs,
-                                      dataset_name=dataset_name)
+                                      class_names=class_names)
             if args.show:
                 cv2.imshow('detection', img_processed)
                 cv2.waitKey(0)
@@ -242,6 +226,4 @@ if __name__ == '__main__':
          transform=BaseTransform(input_size),
          vis_thresh=args.visual_threshold,
          class_colors=class_colors,
-         class_names=class_names,
-         class_indexs=class_indexs,
-         dataset_name=args.dataset)
+         class_names=class_names)

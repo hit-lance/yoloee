@@ -432,7 +432,7 @@ def nms(dets, scores):
     return keep
 
 
-def postprocess(bboxes, scores):
+def postprocess(bboxes, scores, num_classes=20):
     """
     bboxes: (HxW, 4), bsize = 1
     scores: (HxW, num_classes), bsize = 1
@@ -442,14 +442,14 @@ def postprocess(bboxes, scores):
     scores = scores[(np.arange(scores.shape[0]), cls_inds)]
 
     # threshold
-    keep = np.where(scores >= 0.1)
+    keep = np.where(scores >= 0.01)
     bboxes = bboxes[keep]
     scores = scores[keep]
     cls_inds = cls_inds[keep]
 
     # NMS
     keep = np.zeros(len(bboxes), dtype=int)
-    for i in range(scores.shape[-1]):
+    for i in range(num_classes):
         inds = np.where(cls_inds == i)[0]
         if len(inds) == 0:
             continue
@@ -468,7 +468,7 @@ def postprocess(bboxes, scores):
 
 if __name__ == '__main__':
     # build model
-    device = torch.device("cuda")
+    device = torch.device("cpu")
 
     model = YOLOv2R50().to(device)
 
