@@ -95,7 +95,7 @@ def visualize(model,
 
             img_processed_list = []
 
-            for ii, pred in enumerate(preds):
+            for i, pred in enumerate(preds):
                 conf_pred, cls_pred, reg_pred = divide(pred)
                 bbox_pred = decode_boxes(reg_pred, grid_cell, all_anchor_wh)
 
@@ -143,7 +143,7 @@ def visualize(model,
 
                 # Get the size of the text
                 (textWidth,
-                 textHeight), _ = cv2.getTextSize(titles[ii], font, fontScale,
+                 textHeight), _ = cv2.getTextSize(titles[i], font, fontScale,
                                                   thickness)
 
                 # Calculate the position of the text
@@ -152,7 +152,7 @@ def visualize(model,
                     0] + textHeight - 30  # Set the y-coordinate to be the height of the image plus the height of the text plus some padding
 
                 # Add the text to the image
-                cv2.putText(img_processed, titles[ii], (x, y), font, fontScale,
+                cv2.putText(img_processed, titles[i], (x, y), font, fontScale,
                             color, thickness)
 
                 img_processed_list.append(img_processed)
