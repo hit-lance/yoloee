@@ -43,8 +43,8 @@ num_images = len(dataset)
 
 result = []
 if args.cloud:
-     infer_time = []
-     with torch.no_grad():
+    infer_time = []
+    with torch.no_grad():
         for i in range(num_images):
             im, gt, h, w = dataset.pull_item(i)
 
@@ -55,7 +55,7 @@ if args.cloud:
             postprocess(pred, grid_cell, all_anchor_wh)
             t1 = time.time() - t0
             infer_time.append(t1)
-result.append(t1)
+    result.append(infer_time)
 
 for s in range(1, 5):
     infer_time = []
@@ -79,4 +79,4 @@ for s in range(1, 5):
             infer_time.append(t1)
     result.append(sum(infer_time) / len(infer_time))
 
-print(result)
+    print(result)
