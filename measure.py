@@ -1,6 +1,4 @@
 import argparse
-import os
-import numpy as np
 import time
 import torch
 from torch.autograd import Variable
@@ -23,6 +21,7 @@ args = parser.parse_args()
 
 if torch.cuda.is_available():
     device = torch.device("cuda")
+    print("use cuda...")
 else:
     device = torch.device("cpu")
 
