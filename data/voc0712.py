@@ -6,12 +6,10 @@ https://github.com/fmassa/vision/blob/voc_dataset/torchvision/datasets/voc.py
 Updated by: Ellis Brown, Max deGroot
 """
 import os.path as osp
-import sys
 import torch
 import torch.utils.data as data
 import cv2
 import numpy as np
-import random
 import xml.etree.ElementTree as ET
 
 
@@ -194,37 +192,3 @@ class VOCDetection(data.Dataset):
         '''
         return torch.Tensor(self.pull_image(index)).unsqueeze_(0)
 
-
-if __name__ == "__main__":
-    def base_transform(image, size, mean):
-        x = cv2.resize(image, (size, size)).astype(np.float32)
-        x -= mean
-        x = x.astype(np.float32)
-        return x
-
-    class BaseTransform:
-        def __init__(self, size, mean):
-            self.size = size
-            self.mean = np.array(mean, dtype=np.float32)
-
-        def __call__(self, image, boxes=None, labels=None):
-            return base_transform(image, self.size, self.mean), boxes, labels
-
-    img_size = 640
-    # dataset
-    dataset = VOCDetection(data_dir='/mnt/share/ssd2/dataset/VOCdevkit/', 
-                           image_sets=[('2007', 'trainval')],
-                           transform=BaseTransform(img_size, (0, 0, 0)))
-    for i in range(1000):
-        im, gt, h, w = dataset.pull_item(i)
-        img = im.permute(1,2,0).numpy()[:, :, (2, 1, 0)].astype(np.uint8)
-        img = img.copy()
-        for box in gt:
-            xmin, ymin, xmax, ymax, _ = box
-            xmin *= img_size
-            ymin *= img_size
-            xmax *= img_size
-            ymax *= img_size
-            img = cv2.rectangle(img, (int(xmin), int(ymin)), (int(xmax), int(ymax)), (0,0,255), 2)
-        cv2.imshow('gt', img)
-        cv2.waitKey(0)

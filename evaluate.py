@@ -78,10 +78,7 @@ def val(model, val_size, anchor_size, device):
                 bboxes = bboxes.to('cpu').numpy()
 
                 # post-process
-                bboxes, scores, cls_inds = postprocess(bboxes,
-                                                       scores,
-                                                       conf_thresh=0.2,
-                                                       nms_thresh=0.4)
+                bboxes, scores, cls_inds = postprocess(bboxes, scores)
 
                 detect_time = time.time() - t0
                 scale = np.array([[w, h, w, h]])

@@ -15,7 +15,7 @@ from data import detection_collate
 import utils
 
 from models.yoloee import YOLOEE
-from val import val
+from evaluate import val
 
 
 def parse_args():

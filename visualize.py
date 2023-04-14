@@ -7,7 +7,7 @@ import cv2
 import utils
 
 from models.yoloee import YOLOEE
-from val import postprocess
+from evaluate import postprocess
 
 
 def draw_bbox_labels(image, bbox, label=None, cls_color=None, text_scale=0.4):
