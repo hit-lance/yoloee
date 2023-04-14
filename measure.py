@@ -72,7 +72,7 @@ for s in range(1, 5):
 
             if args.cloud and s != 4:
                 t0 = time.time()
-                pred = device_model(inter, s)
+                pred = cloud_model(inter, s)
                 postprocess(pred, grid_cell, all_anchor_wh)
                 t1 = time.time() - t0
 
