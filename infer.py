@@ -40,56 +40,58 @@ imgsetpath = os.path.join('data/VOCdevkit', 'VOC2007', 'ImageSets', 'Main',
 
 all_boxes = [[[] for _ in range(num_images)] for _ in range(len(labelmap))]
 
-with torch.no_grad():
-    for i in range(num_images):
-        im, gt, h, w = dataset.pull_item(i)
 
-        x = Variable(im.unsqueeze(0)).to(device)
-        # forward
-        pred = device_model(x)
+for s in range(1, 4):
+    print("s={}".format(s))
+    for score_threshold in score_threshold_list:
+        with torch.no_grad():
+            for i in range(num_images):
+                im, gt, h, w = dataset.pull_item(i)
 
-        conf_pred, cls_pred, reg_pred = utils.divide(pred)
+                x = Variable(im.unsqueeze(0)).to(device)
+                # forward
+                inter, pred = device_model(x, s)
 
-        bbox_pred = utils.decode_boxes(reg_pred, grid_cell, all_anchor_wh)
+                conf_pred, cls_pred, reg_pred = utils.divide(pred)
+                bbox_pred = utils.decode_boxes(reg_pred, grid_cell,
+                                               all_anchor_wh)
+                scores = torch.sigmoid(conf_pred[0]) * torch.softmax(
+                    cls_pred[0], dim=-1)
+                bboxes = torch.clamp(bbox_pred[0] / 416, 0., 1.)
+                scores = scores.to('cpu').numpy()
+                bboxes = bboxes.to('cpu').numpy()
+                bboxes, scores, cls_inds = postprocess(bboxes, scores)
 
-        # score
-        scores = torch.sigmoid(conf_pred[0]) * torch.softmax(cls_pred[0],
-                                                             dim=-1)
+                if scores.size == 0 or np.mean(scores) < score_threshold:
+                    pred = cloud_model(inter, s)
+                    conf_pred, cls_pred, reg_pred = utils.divide(pred)
+                    bbox_pred = utils.decode_boxes(reg_pred, grid_cell,
+                                                   all_anchor_wh)
+                    scores = torch.sigmoid(conf_pred[0]) * torch.softmax(
+                        cls_pred[0], dim=-1)
+                    bboxes = torch.clamp(bbox_pred[0] / 416, 0., 1.)
+                    scores = scores.to('cpu').numpy()
+                    bboxes = bboxes.to('cpu').numpy()
+                    bboxes, scores, cls_inds = postprocess(bboxes, scores)
 
-        # normalize bbox
-        bboxes = torch.clamp(bbox_pred[0] / im.shape[-1], 0., 1.)
+                scale = np.array([[w, h, w, h]])
+                bboxes *= scale
 
-        # to cpu
-        scores = scores.to('cpu').numpy()
-        bboxes = bboxes.to('cpu').numpy()
+                for j in range(len(labelmap)):
+                    inds = np.where(cls_inds == j)[0]
+                    if len(inds) == 0:
+                        all_boxes[j][i] = np.empty([0, 5], dtype=np.float32)
+                        continue
+                    c_bboxes = bboxes[inds]
+                    c_scores = scores[inds]
+                    c_dets = np.hstack(
+                        (c_bboxes, c_scores[:, np.newaxis])).astype(np.float32,
+                                                                    copy=False)
+                    all_boxes[j][i] = c_dets
 
-        # post-process
-        bboxes, scores, cls_inds = postprocess(bboxes, scores)
+            mAP = evaluate_detections(all_boxes, labelmap, False, dataset,
+                                      'data/VOCdevkitVOC',
+                                      get_output_dir('voc_eval/', 'test'),
+                                      'test', imgsetpath, annopath)
+            print(mAP)
 
-        scale = np.array([[w, h, w, h]])
-        bboxes *= scale
-
-        for j in range(len(labelmap)):
-            inds = np.where(cls_inds == j)[0]
-            if len(inds) == 0:
-                all_boxes[j][i] = np.empty([0, 5], dtype=np.float32)
-                continue
-            c_bboxes = bboxes[inds]
-            c_scores = scores[inds]
-            c_dets = np.hstack(
-                (c_bboxes, c_scores[:, np.newaxis])).astype(np.float32,
-                                                            copy=False)
-            all_boxes[j][i] = c_dets
-
-            if i % 500 == 0:
-                print('im_detect')
-
-    print('Evaluating detections')
-    mAP = evaluate_detections(all_boxes, labelmap, False, dataset,
-                              'data/VOCdevkitVOC',
-                              get_output_dir('voc_eval/', 'test'), 'test',
-                              imgsetpath, annopath)
-
-# for s, out in range(1, 4):
-# inter, out = device_model(x, s)
-# got = cloud_model(inter, s)
