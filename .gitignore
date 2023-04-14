@@ -11,3 +11,5 @@ nohup*
 t.py
 runs
 summary*
+*.npy
+tmp*
