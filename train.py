@@ -247,9 +247,10 @@ def train():
             total_cls_loss = torch.tensor(0.0, requires_grad=True).to(device)
             total_box_loss = torch.tensor(0.0, requires_grad=True).to(device)
             total_iou_loss = torch.tensor(0.0, requires_grad=True).to(device)
-            threshold = 0.067
+            coefficient = [0.188, 0.217, 0.258, 0.337]
+            # coefficient = [0.1671, 0.222, 0.264, 0.346]
             x1y1x2y2_gt = targets[:, :, 7:].view(-1, 4)
-            for pred in preds:
+            for i, pred in enumerate(preds):
                 conf_pred, cls_pred, reg_pred = divide(pred)
 
                 bbox_pred = decode_boxes(reg_pred, grid_cell, all_anchor_wh)
@@ -272,11 +273,10 @@ def train():
                     label=target)
 
                 # compute loss
-                total_conf_loss += threshold * conf_loss
-                total_cls_loss += threshold * cls_loss
-                total_box_loss += threshold * box_loss
-                total_iou_loss += threshold * iou_loss
-                threshold += 0.067
+                total_conf_loss += coefficient[i] * conf_loss
+                total_cls_loss += coefficient[i] * cls_loss
+                total_box_loss += coefficient[i] * box_loss
+                total_iou_loss += coefficient[i] * iou_loss
 
             total_loss = total_conf_loss + total_cls_loss + total_box_loss + total_iou_loss
 
@@ -364,7 +364,7 @@ def train():
                 best_map = cur_map
                 # save model
                 print('Saving state, epoch:', epoch + 1)
-                weight_name = 'new_{}_epoch_{}_{:.2f}.pth'.format(
+                weight_name = '1new_{}_epoch_{}_{:.2f}.pth'.format(
                     args.version, epoch + 1, best_map * 100)
                 checkpoint_path = os.path.join(path_to_save, weight_name)
                 torch.save(model_eval.state_dict(), checkpoint_path)

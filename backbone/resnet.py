@@ -130,19 +130,16 @@ class ResNet50(nn.Module):
         inter1 = self.maxpool(inter1)
 
         inter1 = self.layer1(inter1)
+        inter1 = self.layer2(inter1)
 
         inter2 = inter1
         for i in range(3):
-            inter2 = self.layer2[i](inter2)
+            inter2 = self.layer3[i](inter2)
 
-        inter3 = self.layer2[3](inter2)
-        for i in range(2):
+        inter3 = inter2
+        for i in range(3, 6):
             inter3 = self.layer3[i](inter3)
 
-        inter4 = inter3
-        for i in range(2, 6):
-            inter4 = self.layer3[i](inter4)
+        inter4 = self.layer4(inter3)
 
-        inter5 = self.layer4(inter4)
-
-        return inter1, inter2, inter3, inter4, inter5
+        return inter1, inter2, inter3, inter4
