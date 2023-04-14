@@ -11,7 +11,6 @@ class DeviceModel(YOLOEE):
     def forward(self, x, s=4):
         # backbone
         inter = self.backbone(x, s)
-        out = None
 
         if s == 1:
             out = self.exit1(inter)

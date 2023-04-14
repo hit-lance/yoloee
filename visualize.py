@@ -1,5 +1,4 @@
 import torch
-import torch.backends.cudnn as cudnn
 from data.voc0712 import VOC_CLASSES, VOCDetection
 from data import config, BaseTransform
 import numpy as np
@@ -187,11 +186,10 @@ if __name__ == '__main__':
     visual_threshold = 0.2
     # dataset
     print('test on voc ...')
-    data_dir = 'data/VOCdevkit'
     class_names = VOC_CLASSES
     class_indexs = None
     num_classes = 20
-    dataset = VOCDetection(data_dir=data_dir, image_sets=[('2007', 'test')])
+    dataset = VOCDetection(data_dir='data/VOCdevkit', image_sets=[('2007', 'test')])
 
     class_colors = [(np.random.randint(255), np.random.randint(255),
                      np.random.randint(255)) for _ in range(num_classes)]
