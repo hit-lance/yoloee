@@ -78,7 +78,11 @@ def val(model, val_size, anchor_size, device):
                 bboxes = bboxes.to('cpu').numpy()
 
                 # post-process
-                bboxes, scores, cls_inds = postprocess(bboxes, scores, conf_thresh=0.2)
+                bboxes, scores, cls_inds = postprocess(bboxes,
+                                                       scores,
+                                                       conf_thresh=0.2,
+                                                       nms_thresh=0.4
+                                                       )
 
                 detect_time = time.time() - t0
                 scale = np.array([[w, h, w, h]])
@@ -475,6 +479,7 @@ if __name__ == '__main__':
     device = torch.device("cpu")
 
     model = YOLOv2R50().to(device)
+    model.load_state_dict(torch.load('yoloee.pth', map_location=device))
 
     cfg = config.yolov2_r50_cfg
 
