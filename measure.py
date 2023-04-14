@@ -54,7 +54,7 @@ if args.cloud:
             postprocess(pred, grid_cell, all_anchor_wh)
             t1 = time.time() - t0
             infer_time.append(t1)
-    result.append(infer_time)
+    result.append(sum(infer_time) / len(infer_time))
 
 for s in range(1, 5):
     infer_time = []
