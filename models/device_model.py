@@ -20,6 +20,6 @@ class DeviceModel(YOLOEE):
             out = self.exit3(inter)
         elif s == 4:
             out = self.exit4(inter[0], inter[1])
-            return out
+            return None, out
 
         return inter, out
