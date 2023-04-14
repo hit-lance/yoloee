@@ -10,10 +10,9 @@ import torch
 from data.voc0712 import VOC_CLASSES, VOCDetection
 from data import config
 from data import BaseTransform
-from utils import divide
-from utils.anchor import decode_boxes, set_grid
 
-from models.yolov2_r50 import YOLOv2R50
+import utils
+from models.yoloee import YOLOEE
 import xml.etree.ElementTree as ET
 
 
@@ -25,7 +24,7 @@ def val(model, val_size, anchor_size, device):
     set_type = 'test'
     year = '2007'
     display = False
-    grid_cell, all_anchor_wh = set_grid(val_size, anchor_size, device)
+    grid_cell, all_anchor_wh = utils.set_grid(val_size, anchor_size, device)
 
     # path
     devkit_path = data_dir + 'VOC' + year
@@ -63,8 +62,9 @@ def val(model, val_size, anchor_size, device):
             preds = model(x)
 
             for ii, pred in enumerate(preds):
-                conf_pred, cls_pred, reg_pred = divide(pred)
-                bbox_pred = decode_boxes(reg_pred, grid_cell, all_anchor_wh)
+                conf_pred, cls_pred, reg_pred = utils.divide(pred)
+                bbox_pred = utils.decode_boxes(reg_pred, grid_cell,
+                                               all_anchor_wh)
 
                 # score
                 scores = torch.sigmoid(conf_pred[0]) * torch.softmax(
@@ -81,8 +81,7 @@ def val(model, val_size, anchor_size, device):
                 bboxes, scores, cls_inds = postprocess(bboxes,
                                                        scores,
                                                        conf_thresh=0.2,
-                                                       nms_thresh=0.4
-                                                       )
+                                                       nms_thresh=0.4)
 
                 detect_time = time.time() - t0
                 scale = np.array([[w, h, w, h]])
@@ -350,7 +349,7 @@ def voc_eval(detpath,
         fp = np.cumsum(fp)
         tp = np.cumsum(tp)
         rec = tp / float(npos)
-        # avoid divide by zero in case the first detection matches a difficult
+        # avoid utils.divide by zero in case the first detection matches a difficult
         # ground truth
         prec = tp / np.maximum(tp + fp, np.finfo(np.float64).eps)
         ap = voc_ap(rec, prec, use_07_metric)
@@ -478,7 +477,7 @@ if __name__ == '__main__':
     # build model
     device = torch.device("cpu")
 
-    model = YOLOv2R50().to(device)
+    model = YOLOEE().to(device)
     model.load_state_dict(torch.load('yoloee.pth', map_location=device))
 
     cfg = config.yolov2_r50_cfg

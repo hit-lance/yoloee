@@ -4,25 +4,17 @@ import os
 import random
 import argparse
 import time
-import cv2
-import numpy as np
 
 import torch
 import torch.optim as optim
 
 from data.voc0712 import VOCDetection
 from data import config
-from data import BaseTransform, detection_collate
+from data import detection_collate
 
-import tools
-from utils import divide
-from utils.anchor import decode_boxes, set_grid
+import utils
 
-from utils.augmentations import SSDAugmentation
-from utils.vocapi_evaluator import VOCAPIEvaluator
-from utils.modules import ModelEMA
-
-from models.yolov2_r50 import YOLOv2R50
+from models.yoloee import YOLOEE
 from val import val
 
 
@@ -92,10 +84,6 @@ def parse_args():
                         action='store_true',
                         default=False,
                         help='use multi-scale trick')
-    parser.add_argument('--ema',
-                        action='store_true',
-                        default=False,
-                        help='use ema training trick')
 
     return parser.parse_args()
 
@@ -126,15 +114,11 @@ def train():
     else:
         train_size = val_size = cfg['train_size']
 
-    # Model ENA
-    if args.ema:
-        print('use EMA trick ...')
-
     # dataset and evaluator
     data_dir = 'data/VOCdevkit'
     num_classes = 20
     dataset = VOCDetection(data_dir=data_dir,
-                           transform=SSDAugmentation(train_size))
+                           transform=utils.SSDAugmentation(train_size))
 
     print('Training model on:', dataset.name)
     print('The dataset size:', len(dataset))
@@ -142,11 +126,11 @@ def train():
 
     # build model
     anchor_size = cfg['anchor_size']
-    net = YOLOv2R50(num_classes=num_classes)
+    net = YOLOEE(num_classes=num_classes)
     model = net
     model = model.to(device).train()
 
-    grid_cell, all_anchor_wh = set_grid(train_size, anchor_size, device)
+    grid_cell, all_anchor_wh = utils.set_grid(train_size, anchor_size, device)
 
     batch_size = args.batch_size
 
@@ -158,9 +142,6 @@ def train():
                                              num_workers=args.num_workers,
                                              pin_memory=True,
                                              drop_last=True)
-
-    # EMA
-    ema = ModelEMA(model) if args.ema else None
 
     # use tfboard
     if args.tfboard:
@@ -215,8 +196,8 @@ def train():
                 # randomly choose a new size
                 r = cfg['random_size_range']
                 train_size = random.randint(r[0], r[1]) * 32
-                grid_cell, all_anchor_wh = set_grid(train_size, anchor_size,
-                                                    device)
+                grid_cell, all_anchor_wh = utils.set_grid(
+                    train_size, anchor_size, device)
 
             if args.multi_scale:
                 # interpolate
@@ -226,13 +207,9 @@ def train():
                                                          align_corners=False)
 
             targets = [label.tolist() for label in targets]
-            # visualize labels
-            if args.vis:
-                vis_data(images, targets, train_size)
-                continue
 
             # label assignment
-            targets = tools.gt_creator(input_size=train_size,
+            targets = utils.gt_creator(input_size=train_size,
                                        stride=32,
                                        label_lists=targets,
                                        anchor_size=anchor_size)
@@ -251,21 +228,22 @@ def train():
             # coefficient = [0.1671, 0.222, 0.264, 0.346]
             x1y1x2y2_gt = targets[:, :, 7:].view(-1, 4)
             for i, pred in enumerate(preds):
-                conf_pred, cls_pred, reg_pred = divide(pred)
+                conf_pred, cls_pred, reg_pred = utils.divide(pred)
 
-                bbox_pred = decode_boxes(reg_pred, grid_cell, all_anchor_wh)
+                bbox_pred = utils.decode_boxes(reg_pred, grid_cell,
+                                               all_anchor_wh)
 
                 x1y1x2y2_pred = (bbox_pred / train_size).view(-1, 4)
 
                 # reg_pred = reg_pred.view(batch_size, -1, 4)
                 # set conf target
-                iou_pred = tools.iou_score(x1y1x2y2_pred, x1y1x2y2_gt).view(
+                iou_pred = utils.iou_score(x1y1x2y2_pred, x1y1x2y2_gt).view(
                     batch_size, -1, 1)
                 gt_conf = iou_pred.clone().detach()
 
                 # [obj, cls, txtytwth, x1y1x2y2] -> [conf, obj, cls, txtytwth]
                 target = torch.cat([gt_conf, targets[:, :, :7]], dim=2)
-                conf_loss, cls_loss, box_loss, iou_loss = tools.loss(
+                conf_loss, cls_loss, box_loss, iou_loss = utils.loss(
                     pred_conf=conf_pred,
                     pred_cls=cls_pred,
                     pred_txtytwth=reg_pred,
@@ -292,10 +270,6 @@ def train():
             total_loss.backward()
             optimizer.step()
             optimizer.zero_grad()
-
-            # ema
-            if args.ema:
-                ema.update(model)
 
             # display
             if iter_i % 10 == 0:
@@ -335,18 +309,8 @@ def train():
 
                 t0 = time.time()
 
-        # evaluation
-        # evaluator = VOCAPIEvaluator(data_root=data_dir,
-        #                             img_size=val_size,
-        #                             anchor_size=anchor_size,
-        #                             device=device,
-        #                             transform=BaseTransform(val_size))
-
         if (epoch % args.eval_epoch) == 0 or (epoch == max_epoch - 1):
-            if args.ema:
-                model_eval = ema.ema
-            else:
-                model_eval = model
+            model_eval = model
 
             print('eval ...')
 
@@ -382,31 +346,6 @@ def train():
 def set_lr(optimizer, lr):
     for param_group in optimizer.param_groups:
         param_group['lr'] = lr
-
-
-def vis_data(images, targets, input_size):
-    # vis data
-    mean = (0.406, 0.456, 0.485)
-    std = (0.225, 0.224, 0.229)
-    mean = np.array(mean, dtype=np.float32)
-    std = np.array(std, dtype=np.float32)
-
-    img = images[0].permute(1, 2, 0).cpu().numpy()[:, :, ::-1]
-    img = ((img * std + mean) * 255).astype(np.uint8)
-    img = img.copy()
-
-    for box in targets[0]:
-        xmin, ymin, xmax, ymax = box[:-1]
-        # print(xmin, ymin, xmax, ymax)
-        xmin *= input_size
-        ymin *= input_size
-        xmax *= input_size
-        ymax *= input_size
-        cv2.rectangle(img, (int(xmin), int(ymin)), (int(xmax), int(ymax)),
-                      (0, 0, 255), 2)
-
-    cv2.imshow('img', img)
-    cv2.waitKey(0)
 
 
 if __name__ == '__main__':

@@ -4,10 +4,9 @@ from data.voc0712 import VOC_CLASSES, VOCDetection
 from data import config, BaseTransform
 import numpy as np
 import cv2
+import utils
 
-from models.yolov2_r50 import YOLOv2R50
-from utils import divide
-from utils.anchor import decode_boxes, set_grid
+from models.yoloee import YOLOEE
 from val import postprocess
 
 
@@ -68,7 +67,7 @@ def visualize(model,
     num_images = len(dataset)
     # num_images = 5
 
-    grid_cell, all_anchor_wh = set_grid(416, anchor_size, device)
+    grid_cell, all_anchor_wh = utils.set_grid(416, anchor_size, device)
 
     border_size = 40
     border_color = (255, 255, 255)  # white
@@ -96,8 +95,9 @@ def visualize(model,
             img_processed_list = []
 
             for i, pred in enumerate(preds):
-                conf_pred, cls_pred, reg_pred = divide(pred)
-                bbox_pred = decode_boxes(reg_pred, grid_cell, all_anchor_wh)
+                conf_pred, cls_pred, reg_pred = utils.divide(pred)
+                bbox_pred = utils.decode_boxes(reg_pred, grid_cell,
+                                               all_anchor_wh)
 
                 # score
                 scores = torch.sigmoid(conf_pred[0]) * torch.softmax(
@@ -200,7 +200,7 @@ if __name__ == '__main__':
 
     # load model
     anchor_size = cfg['anchor_size']
-    model = YOLOv2R50(num_classes=num_classes)
+    model = YOLOEE(num_classes=num_classes)
     model.load_state_dict(torch.load('yoloee.pth', map_location=device))
     model.to(device)
 

@@ -1,11 +1,7 @@
-import math
-import torch
 import torch.nn as nn
-from copy import deepcopy
 
 
 class CBL(nn.Module):
-
     def __init__(self,
                  in_channels,
                  out_channels,
@@ -27,7 +23,6 @@ class CBL(nn.Module):
 
 
 class reorg_layer(nn.Module):
-
     def __init__(self, stride):
         super(reorg_layer, self).__init__()
         self.stride = stride
@@ -45,26 +40,3 @@ class reorg_layer(nn.Module):
         x = x.view(batch_size, -1, _height, _width)
 
         return x
-
-
-class ModelEMA(object):
-
-    def __init__(self, model, decay=0.9999, updates=0):
-        # create EMA
-        self.ema = deepcopy(model).eval()
-        self.updates = updates
-        self.decay = lambda x: decay * (1 - math.exp(-x / 2000.))
-        for p in self.ema.parameters():
-            p.requires_grad_(False)
-
-    def update(self, model):
-        # Update EMA parameters
-        with torch.no_grad():
-            self.updates += 1
-            d = self.decay(self.updates)
-
-            msd = model.state_dict()
-            for k, v in self.ema.state_dict().items():
-                if v.dtype.is_floating_point:
-                    v *= d
-                    v += (1. - d) * msd[k].detach()

@@ -1,30 +1,6 @@
 import torch.nn as nn
 import torch.utils.model_zoo as model_zoo
 
-__all__ = ['resnet50']
-
-
-class CBL(nn.Module):
-
-    def __init__(self,
-                 in_channels,
-                 out_channels,
-                 kernel_size=1,
-                 stride=1,
-                 padding=0,
-                 dilation=1):
-        super(CBL, self).__init__()
-        self.conv = nn.Conv2d(in_channels, out_channels, kernel_size, stride,
-                              padding, dilation)
-        self.bn = nn.BatchNorm2d(out_channels)
-        self.relu = nn.LeakyReLU(0.1, inplace=True)
-
-    def forward(self, x):
-        out = self.conv(x)
-        out = self.bn(out)
-        out = self.relu(out)
-        return out
-
 
 def conv3x3(in_planes, out_planes, stride=1):
     """3x3 convolution with padding"""
@@ -84,7 +60,6 @@ class Bottleneck(nn.Module):
 
 
 class ResNet50(nn.Module):
-
     def __init__(self):
         super(ResNet50, self).__init__()
         self.inplanes = 64
