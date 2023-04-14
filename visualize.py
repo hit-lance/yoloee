@@ -94,24 +94,9 @@ def visualize(model,
             img_processed_list = []
 
             for i, pred in enumerate(preds):
-                conf_pred, cls_pred, reg_pred = utils.divide(pred)
-                bbox_pred = utils.decode_boxes(reg_pred, grid_cell,
-                                               all_anchor_wh)
-
-                # score
-                scores = torch.sigmoid(conf_pred[0]) * torch.softmax(
-                    cls_pred[0], dim=-1)
-
-                # normalize bbox
-                bboxes = torch.clamp(bbox_pred[0] / 416, 0., 1.)
-
-                # to cpu
-                scores = scores.to('cpu').numpy()
-                bboxes = bboxes.to('cpu').numpy()
-
-                # post-process
-                bboxes, scores, cls_inds = postprocess(bboxes,
-                                                       scores,
+                bboxes, scores, cls_inds = postprocess(pred,
+                                                       grid_cell,
+                                                       all_anchor_wh,
                                                        conf_thresh=vis_thresh)
 
                 # rescale
@@ -189,7 +174,8 @@ if __name__ == '__main__':
     class_names = VOC_CLASSES
     class_indexs = None
     num_classes = 20
-    dataset = VOCDetection(data_dir='data/VOCdevkit', image_sets=[('2007', 'test')])
+    dataset = VOCDetection(data_dir='data/VOCdevkit',
+                           image_sets=[('2007', 'test')])
 
     class_colors = [(np.random.randint(255), np.random.randint(255),
                      np.random.randint(255)) for _ in range(num_classes)]

@@ -62,23 +62,10 @@ def val(model, val_size, anchor_size, device):
             preds = model(x)
 
             for ii, pred in enumerate(preds):
-                conf_pred, cls_pred, reg_pred = utils.divide(pred)
-                bbox_pred = utils.decode_boxes(reg_pred, grid_cell,
-                                               all_anchor_wh)
-
-                # score
-                scores = torch.sigmoid(conf_pred[0]) * torch.softmax(
-                    cls_pred[0], dim=-1)
-
-                # normalize bbox
-                bboxes = torch.clamp(bbox_pred[0] / im.shape[-1], 0., 1.)
-
-                # to cpu
-                scores = scores.to('cpu').numpy()
-                bboxes = bboxes.to('cpu').numpy()
 
                 # post-process
-                bboxes, scores, cls_inds = postprocess(bboxes, scores)
+                bboxes, scores, cls_inds = postprocess(pred, grid_cell,
+                                                       all_anchor_wh)
 
                 detect_time = time.time() - t0
                 scale = np.array([[w, h, w, h]])
@@ -432,15 +419,25 @@ def nms(dets, scores, nms_thresh=0.5):
     return keep
 
 
-def postprocess(bboxes,
-                scores,
+def postprocess(pred,
+                grid_cell,
+                all_anchor_wh,
                 num_classes=20,
                 conf_thresh=0.2,
                 nms_thresh=0.5):
-    """
-    bboxes: (HxW, 4), bsize = 1
-    scores: (HxW, num_classes), bsize = 1
-    """
+
+    conf_pred, cls_pred, reg_pred = utils.divide(pred)
+    bbox_pred = utils.decode_boxes(reg_pred, grid_cell, all_anchor_wh)
+
+    # score
+    scores = torch.sigmoid(conf_pred[0]) * torch.softmax(cls_pred[0], dim=-1)
+
+    # normalize bbox
+    bboxes = torch.clamp(bbox_pred[0] / 416, 0., 1.)
+
+    # to cpu
+    scores = scores.to('cpu').numpy()
+    bboxes = bboxes.to('cpu').numpy()
 
     cls_inds = np.argmax(scores, axis=1)
     scores = scores[(np.arange(scores.shape[0]), cls_inds)]
