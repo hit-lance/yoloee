@@ -118,3 +118,53 @@ class ResNet50(nn.Module):
         inter4 = self.layer4(inter3)
 
         return inter1, inter2, inter3, inter4
+
+
+class DeviceResNet50(ResNet50):
+    def __init__(self):
+        super(DeviceResNet50, self).__init__()
+
+    def forward(self, x, s):
+        inter = self.conv1(x)
+        inter = self.bn1(inter)
+        inter = self.relu(inter)
+        inter = self.maxpool(inter)
+        inter = self.layer1(inter)
+        inter = self.layer2(inter)
+        if s == 1:
+            return inter
+
+        for i in range(3):
+            inter = self.layer3[i](inter)
+        if s == 2:
+            return inter
+
+        for i in range(3, 6):
+            inter = self.layer3[i](inter)
+        if s == 3:
+            return inter
+
+        return inter, self.layer4(inter)
+
+
+class CloudResNet50(ResNet50):
+    def __init__(self):
+        super(CloudResNet50, self).__init__()
+
+    def forward(self, x, s):
+        inter = x
+        if s == 0:
+            inter = self.conv1(inter)
+            inter = self.bn1(inter)
+            inter = self.relu(inter)
+            inter = self.maxpool(inter)
+            inter = self.layer1(inter)
+            inter = self.layer2(inter)
+            inter = self.layer3(inter)
+        elif s == 1:
+            inter = self.layer3(inter)
+        elif s == 2:
+            for i in range(3, 6):
+                inter = self.layer3[i](inter)
+
+        return inter, self.layer4(inter)
