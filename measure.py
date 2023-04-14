@@ -79,4 +79,4 @@ for s in range(1, 5):
             infer_time.append(t1)
     result.append(sum(infer_time) / len(infer_time))
 
-    print(result)
+print(result)
