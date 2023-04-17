@@ -10,7 +10,7 @@ stub = InferenceAPIsServiceStub(channel)
 model_name = "yoloee"
 
 
-def cloud_infer(x, s, x_max=np.float32(0), x_min=np.float32(0)):
+def cloud_infer(x, s=0, x_max=np.float32(0), x_min=np.float32(0)):
     model_input = {
         "model_input": x.tobytes(),
         "split_point": s.to_bytes(1, byteorder='big'),
@@ -25,6 +25,7 @@ def cloud_infer(x, s, x_max=np.float32(0), x_min=np.float32(0)):
     prediction = np.frombuffer(prediction,
                                dtype=np.float32).reshape(125, 13, 13)
     return prediction
+
 
 if __name__ == "__main__":
     # x = np.random.rand(855163)
