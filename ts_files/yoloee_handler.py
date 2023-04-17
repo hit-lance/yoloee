@@ -79,8 +79,6 @@ class YOLOEEHandler(BaseHandler):
         data = data[0]
 
         s = int.from_bytes(data["split_point"], byteorder='big')
-        x_max = np.frombuffer(data["x_max"], dtype=np.float32)
-        x_min = np.frombuffer(data["x_min"], dtype=np.float32)
 
         if s == 0:
             model_input = np.frombuffer(data["model_input"],
@@ -88,10 +86,9 @@ class YOLOEEHandler(BaseHandler):
                                             1, 3, 416, 416)
         else:
             x_c = np.frombuffer(data["model_input"], dtype=np.uint8)
-            if s == 1:
-                x_shape = (1, 512, 52, 52)
-            else:
-                x_shape = (1, 1024, 26, 26)
+            x_max = np.frombuffer(data["x_max"], dtype=np.float32)
+            x_min = np.frombuffer(data["x_min"], dtype=np.float32)
+            x_shape = (1, 512, 52, 52) if s == 1 else (1, 1024, 26, 26)
 
             model_input = uncompress(x_c, x_max, x_min, x_shape)
 
