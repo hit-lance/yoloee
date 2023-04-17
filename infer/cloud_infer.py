@@ -1,13 +1,7 @@
-import grpc
 import numpy as np
-from .inference_pb2 import PredictionsRequest
-from .inference_pb2_grpc import InferenceAPIsServiceStub
-# import inference_pb2_grpc
+import requests
 
-channel = grpc.insecure_channel("localhost:7070")
-stub = InferenceAPIsServiceStub(channel)
-
-model_name = "yoloee"
+session = requests.Session()
 
 
 def cloud_infer(x, s=0, x_max=np.float32(0), x_min=np.float32(0)):
@@ -18,18 +12,18 @@ def cloud_infer(x, s=0, x_max=np.float32(0), x_min=np.float32(0)):
         "x_min": x_min.tobytes()
     }
 
-    response = stub.Predictions(
-        PredictionsRequest(model_name=model_name, input=model_input))
+    res = session.post("http://localhost:8080/predictions/yoloee",
+                       data=model_input)
 
-    prediction = response.prediction
-    prediction = np.frombuffer(prediction,
+    prediction = np.frombuffer(res.content,
                                dtype=np.float32).reshape(125, 13, 13)
     return prediction
 
 
 if __name__ == "__main__":
     # x = np.random.rand(855163)
-    x = np.random.rand(1, 1024, 26, 26)
-    s = 2
+    x = np.random.rand(1, 3, 416, 416).astype(np.float32)
+    s = 0
 
-    # cloud_infer(x, s, x_min, x_max)
+    output = cloud_infer(x, s)
+    # print(output)
