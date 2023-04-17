@@ -13,3 +13,5 @@ runs
 summary*
 *.npy
 tmp*
+*.zip
+.DS_Store

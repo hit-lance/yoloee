@@ -25,10 +25,6 @@ if torch.cuda.is_available():
 else:
     device = torch.device("cpu")
 
-cloud_model = CloudModel().to(device)
-cloud_model.load_state_dict(torch.load('yoloee.pth', map_location=device))
-cloud_model.eval()
-
 device_model = DeviceModel().to(device)
 device_model.load_state_dict(torch.load('yoloee.pth', map_location=device))
 device_model.eval()
@@ -42,6 +38,9 @@ num_images = len(dataset)
 
 result = []
 if args.cloud:
+    cloud_model = CloudModel().to(device)
+    cloud_model.load_state_dict(torch.load('yoloee.pth', map_location=device))
+    cloud_model.eval()
     infer_time = []
     with torch.no_grad():
         for i in range(num_images):

@@ -1,4 +1,3 @@
-import torch.nn as nn
 from models.backbone import CloudResNet50
 from models.yoloee import YOLOEE
 
