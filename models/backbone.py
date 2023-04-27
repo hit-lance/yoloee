@@ -58,6 +58,26 @@ class Bottleneck(nn.Module):
 
         return out
 
+    def split_forward(self, x):
+        identity = x
+
+        out = self.conv1(x)
+        out = self.bn1(out)
+        out = self.relu(out)
+        inter = out
+
+        out = self.conv2(out)
+        out = self.bn2(out)
+        out = self.relu(out)
+
+        out = self.conv3(out)
+        out = self.bn3(out)
+
+        out += identity
+        out = self.relu(out)
+
+        return out, inter
+
 
 class ResNet50(nn.Module):
     def __init__(self):
@@ -105,19 +125,25 @@ class ResNet50(nn.Module):
         inter1 = self.maxpool(inter1)
 
         inter1 = self.layer1(inter1)
-        inter1 = self.layer2(inter1)
 
-        inter2 = inter1
         for i in range(3):
+            inter1 = self.layer2[i](inter1)
+        inter2, inter1 = self.layer2[3].split_forward(inter1)
+
+        for i in range(2):
             inter2 = self.layer3[i](inter2)
+        inter3, inter2 = self.layer3[2].split_forward(inter2)
 
-        inter3 = inter2
-        for i in range(3, 6):
+        for i in range(3, 5):
             inter3 = self.layer3[i](inter3)
+        inter4, inter3 = self.layer3[5].split_forward(inter3)
+        inter5 = inter4
 
-        inter4 = self.layer4(inter3)
+        for i in range(2):
+            inter4 = self.layer4[i](inter4)
+        inter6, inter4 = self.layer4[2].split_forward(inter4)
 
-        return inter1, inter2, inter3, inter4
+        return inter1, inter2, inter3, inter4, inter5, inter6
 
 
 class DeviceResNet50(ResNet50):
