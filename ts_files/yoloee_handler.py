@@ -21,8 +21,6 @@ def linear_dequantize(x_q, x_max, x_min):
 
 
 def uncompress(x_c, x_max, x_min, x_shape):
-    print(x_c.shape)
-    print(x_c[:10])
     x = bitshuffle.decompress_lz4(x_c, (math.prod(x_shape), ),
                                   np.dtype('uint8'))
     x = linear_dequantize(x, x_max, x_min)
@@ -88,7 +86,13 @@ class YOLOEEHandler(BaseHandler):
             x_c = np.frombuffer(data["model_input"], dtype=np.uint8)
             x_max = np.frombuffer(data["x_max"], dtype=np.float32)
             x_min = np.frombuffer(data["x_min"], dtype=np.float32)
-            x_shape = (1, 512, 52, 52) if s == 1 else (1, 1024, 26, 26)
+
+            if s == 1:
+                x_shape = (1, 128, 52, 52) 
+            elif s==2:
+                x_shape = (1, 256, 26, 26)
+            else:
+                x_shape = (1, 512, 13, 13)
 
             model_input = uncompress(x_c, x_max, x_min, x_shape)
 

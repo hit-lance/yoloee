@@ -17,7 +17,6 @@ class YOLOEE(nn.Module):
 
     def forward(self, x):
         inters = self.backbone(x)
-        # return inters[:4]
         out1 = self.exit1(inters[0])
         out2 = self.exit2(inters[1])
         out3 = self.exit3(inters[2])
