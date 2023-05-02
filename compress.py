@@ -64,4 +64,4 @@ if __name__ == "__main__":
     # print(psnr(a, a_dequantized))
     # print(a_quantized.nbytes / a.nbytes)
     # print(a_compressed.nbytes / a.nbytes)
-    # print("compression ratio: {}".format(a.nbytes / a_compressed.nbytes))
+    print("compression ratio: {}".format(a.nbytes / a_c.nbytes))

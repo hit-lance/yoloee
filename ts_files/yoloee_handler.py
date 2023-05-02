@@ -10,6 +10,7 @@ import os
 import numpy as np
 import torch
 import bitshuffle
+import cv2
 
 from ts.torch_handler.base_handler import BaseHandler
 
@@ -119,6 +120,17 @@ def uncompress(x_c, x_max, x_min, x_shape):
     return x
 
 
+def base_transform(image,
+                   size=416,
+                   mean=(0.406, 0.456, 0.485),
+                   std=(0.225, 0.224, 0.229)):
+    x = cv2.resize(image, (size, size)).astype(np.float32)
+    x /= 255.
+    x -= mean
+    x /= std
+    return x
+
+
 class YOLOEEHandler(BaseHandler):
     """
     A custom model handler implementation.
@@ -176,13 +188,18 @@ class YOLOEEHandler(BaseHandler):
         s = int.from_bytes(data["split_point"], byteorder='big')
 
         if s == 0:
-            model_input = np.frombuffer(data["model_input"],
-                                        dtype=np.float32).reshape(
-                                            1, 3, 416, 416)
+            h = int(np.frombuffer(data["field1"], dtype=np.int64))
+            w = int(np.frombuffer(data["field2"], dtype=np.int64))
+            image = np.frombuffer(data["model_input"],
+                                  dtype=np.uint8).reshape(h, w, 3)
+            model_input = torch.from_numpy(
+                base_transform(image)[:, :, (2, 1, 0)]).permute(2, 0, 1)
+            model_input = model_input.unsqueeze(0)
+
         else:
             x_c = np.frombuffer(data["model_input"], dtype=np.uint8)
-            x_max = np.frombuffer(data["x_max"], dtype=np.float32)
-            x_min = np.frombuffer(data["x_min"], dtype=np.float32)
+            x_max = np.frombuffer(data["field1"], dtype=np.float32)
+            x_min = np.frombuffer(data["field2"], dtype=np.float32)
 
             if s == 1:
                 x_shape = (1, 128, 52, 52)
@@ -193,7 +210,7 @@ class YOLOEEHandler(BaseHandler):
 
             model_input = uncompress(x_c, x_max, x_min, x_shape)
 
-        model_input = torch.from_numpy(model_input).float()
+            model_input = torch.from_numpy(model_input).float()
 
         return model_input, s
 
