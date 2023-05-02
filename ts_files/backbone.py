@@ -98,10 +98,10 @@ class ResNet50(nn.Module):
         self.layer3 = self._make_layer(Bottleneck, 256, 6, stride=2)
         self.layer4 = self._make_layer(Bottleneck, 512, 3, stride=2)
 
-        state_dict = model_zoo.load_url(
-            'https://download.pytorch.org/models/resnet50-19c8e357.pth')
-        del state_dict['fc.weight'], state_dict['fc.bias']
-        self.load_state_dict(state_dict, strict=True)
+        # state_dict = model_zoo.load_url(
+        #     'https://download.pytorch.org/models/resnet50-19c8e357.pth')
+        # del state_dict['fc.weight'], state_dict['fc.bias']
+        # self.load_state_dict(state_dict, strict=True)
 
     def _make_layer(self, block, planes, blocks, stride=1):
         downsample = None
