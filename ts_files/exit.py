@@ -1,6 +1,5 @@
-import torch
 import torch.nn as nn
-from common import CBL, reorg_layer
+from common import CBL
 
 
 class EarlyExit(nn.Module):

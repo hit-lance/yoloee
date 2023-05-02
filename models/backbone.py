@@ -58,13 +58,13 @@ class Bottleneck(nn.Module):
 
         return out
 
-    def forward1(self,x):
+    def forward1(self, x):
         out = self.conv1(x)
         out = self.bn1(out)
         out = self.relu(out)
         return out
-    
-    def forward2(self,inter):
+
+    def forward2(self, inter):
         out = self.conv2(inter)
         out = self.bn2(out)
         out = self.relu(out)
@@ -78,7 +78,6 @@ class Bottleneck(nn.Module):
         inter = self.forward1(x)
         out = self.forward2(inter)
         return out, inter
-    
 
 
 class ResNet50(nn.Module):
@@ -125,7 +124,6 @@ class ResNet50(nn.Module):
         inter1 = self.bn1(inter1)
         inter1 = self.relu(inter1)
         inter1 = self.maxpool(inter1)
-
         inter1 = self.layer1(inter1)
 
         for i in range(3):
@@ -138,11 +136,11 @@ class ResNet50(nn.Module):
 
         for i in range(4, 6):
             inter3 = self.layer3[i](inter3)
-        
+
         inter3 = self.layer4[0](inter3)
         inter4, inter3 = self.layer4[1].split_forward(inter3)
         inter4 = self.layer4[2](inter4)
-        
+
         return inter1, inter2, inter3, inter4
 
 
@@ -159,7 +157,7 @@ class DeviceResNet50(ResNet50):
 
         for i in range(3):
             out = self.layer2[i](out)
-        
+
         inter1 = self.layer2[3].forward1(out)
         if s == 1:
             return inter1
@@ -174,14 +172,16 @@ class DeviceResNet50(ResNet50):
 
         for i in range(4, 6):
             out = self.layer3[i](out)
-        
+
         out = self.layer4[0](out)
         inter3 = self.layer4[1].forward1(out)
         if s == 3:
             return inter3
         out = self.layer4[1].forward2(inter3)
+        out = self.layer4[2](out)
 
         return out
+
 
 class CloudResNet50(ResNet50):
     def __init__(self):
@@ -194,22 +194,44 @@ class CloudResNet50(ResNet50):
             out = self.relu(out)
             out = self.maxpool(out)
             out = self.layer1(out)
-            out = self.layer2(out)
-            out = self.layer3(out)
-            out = self.layer4(out)
+            for i in range(3):
+                out = self.layer2[i](out)
+            out, _ = self.layer2[3].split_forward(out)
 
-        if s==1:
+            for i in range(3):
+                out = self.layer3[i](out)
+            out, _ = self.layer3[3].split_forward(out)
+
+            for i in range(4, 6):
+                out = self.layer3[i](out)
+
+            out = self.layer4[0](out)
+            out, _ = self.layer4[1].split_forward(out)
+            out = self.layer4[2](out)
+
+        elif s == 1:
             out = self.layer2[3].forward2(x)
-            out = self.layer3(out)
-            out = self.layer4(out)
+            for i in range(3):
+                out = self.layer3[i](out)
+            out, _ = self.layer3[3].split_forward(out)
 
-        elif s==2:
+            for i in range(4, 6):
+                out = self.layer3[i](out)
+
+            out = self.layer4[0](out)
+            out, _ = self.layer4[1].split_forward(out)
+            out = self.layer4[2](out)
+
+        elif s == 2:
             out = self.layer3[3].forward2(x)
             for i in range(4, 6):
                 out = self.layer3[i](out)
-            out = self.layer4(out)
 
-        elif s==3:
+            out = self.layer4[0](out)
+            out, _ = self.layer4[1].split_forward(out)
+            out = self.layer4[2](out)
+
+        elif s == 3:
             out = self.layer4[1].forward2(x)
             out = self.layer4[2](out)
 
