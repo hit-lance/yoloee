@@ -43,18 +43,13 @@ class FinalExit(nn.Module):
         super(FinalExit, self).__init__()
         self.cbl1 = CBL(2048, 1024, kernel_size=1)
         self.cbl2 = CBL(1024, 1024, kernel_size=3, padding=1)
-        self.route_layer = CBL(1024, 128, kernel_size=1)
-        self.reorg = reorg_layer(stride=2)
-        self.cbl3 = CBL(1024 + 128 * 4, 1024, kernel_size=3, padding=1)
+        self.cbl3 = CBL(1024, 1024, kernel_size=3, padding=1)
         # pred
         self.pred = nn.Conv2d(1024, num_anchors * (1 + 4 + num_classes), 1)
 
-    def forward(self, x, y):
-        x = self.route_layer(x)
-        x = self.reorg(x)
+    def forward(self, y):
         y = self.cbl1(y)
         y = self.cbl2(y)
-        out = torch.cat([x, y], dim=1)
-        out = self.cbl3(out)
+        out = self.cbl3(y)
         out = self.pred(out)
         return out

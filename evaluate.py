@@ -45,7 +45,7 @@ def val(model, val_size, anchor_size, device):
     #    (x1, y1, x2, y2, score)
     # all_boxes = [[[] for _ in range(num_images)] for _ in range(len(labelmap))]
     all_boxes_list = []
-    for _ in range(5):
+    for _ in range(4):
         all_boxes_list.append([[[] for _ in range(num_images)]
                                for _ in range(len(labelmap))])
 

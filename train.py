@@ -224,7 +224,7 @@ def train():
             total_cls_loss = torch.tensor(0.0, requires_grad=True).to(device)
             total_box_loss = torch.tensor(0.0, requires_grad=True).to(device)
             total_iou_loss = torch.tensor(0.0, requires_grad=True).to(device)
-            coefficient = [0.1239, 0.1630, 0.1971, 0.2360, 0.2799]
+            coefficient = [0.1569, 0.2208, 0.2846, 0.3377]
             # coefficient = [0.127, 0.165, 0.198, 0.236, 0.273]
 
             x1y1x2y2_gt = targets[:, :, 7:].view(-1, 4)
@@ -329,14 +329,14 @@ def train():
                 best_map = cur_map
                 # save model
                 print('Saving state, epoch:', epoch + 1)
-                weight_name = '444_{}_epoch_{}.pth'.format(
+                weight_name = '333_{}_epoch_{}.pth'.format(
                     args.version, epoch + 1)
                 checkpoint_path = os.path.join(path_to_save, weight_name)
                 torch.save(model_eval.state_dict(), checkpoint_path)
 
             if args.tfboard:
                 for i, mAP in enumerate(mAPs):
-                    tblogger.add_scalar('07test/mAP' + str(i + 1), mAP, epoch)  
+                    tblogger.add_scalar('07test/mAP' + str(i + 1), mAP, epoch)
 
             model_eval.train()
 

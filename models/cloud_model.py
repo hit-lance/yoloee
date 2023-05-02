@@ -10,5 +10,5 @@ class CloudModel(YOLOEE):
     def forward(self, x, s=0):
         # backbone
         inter = self.backbone(x, s)
-        out = self.exit4(inter[0], inter[1])
+        out = self.exit4(inter)
         return out
