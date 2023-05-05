@@ -2,6 +2,7 @@ import numpy as np
 import bitshuffle
 import time
 import math
+import huffman
 
 
 def linear_quantize(x):
@@ -36,32 +37,52 @@ def compress(x):
 
 
 def uncompress(x_c, x_max, x_min, x_shape):
-    x = bitshuffle.decompress_lz4(x_c, (math.prod(x_shape), ), np.dtype('uint8'))
+    x = bitshuffle.decompress_lz4(x_c, (math.prod(x_shape), ),
+                                  np.dtype('uint8'))
     x = linear_dequantize(x, x_max, x_min)
     x = x.reshape(x_shape)
     return x
 
 
 if __name__ == "__main__":
-    with open('t.npy', 'rb') as f:
-        a = np.load(f)
+    n = 16551
+    ct = [[], [], []]
+    ut = [[], [], []]
+    ratio = [[], [], []]
+    for i in range(1):
+        for j in range(100):
+            with open("inters/test/{}/{}.npy".format(i + 1, j), 'rb') as f:
+                a = np.load(f)
+                # a = np.clip(a, None, 1)
+                if i == 1:
+                    a = a.reshape(1, 128, 52, 26)
+                elif i == 2:
+                    a = a.reshape(1, 128, 26, 26)
 
-    print(a.nbytes)
+            start = time.time()
+            # a_c = huffman.encode(a)
+            a_c, a_max, a_min = compress(a)
+            end = time.time()
+            ct[i].append(end - start)
 
-    start = time.time()
-    a_c, a_max, a_min = compress(a)
-    end = time.time()
-    print(end - start)
+            # uncompress+dequantize
+            start = time.time()
+            # a_uncompressed = huffman.decode(a_c)
+            a_uncompressed = uncompress(a_c, a_max, a_min, a.shape)
+            end = time.time()
+            ut[i].append(end - start)
 
-    # uncompress+dequantize
-    start = time.time()
-    a_uncompressed = uncompress(a_c, a_max, a_min, a.shape)
-    end = time.time()
-    print(end - start)
+            # quantization psnr
+            # print(np.allclose(a, a_uncompressed, atol=0.01))
+            # print(psnr(a, a_dequantized))
+            # print(a_quantized.nbytes / a.nbytes)
+            # print(a_compressed.nbytes / a.nbytes)
+            # print("compression ratio: {}".format(a.nbytes / a_c.nbytes))
+            # print("compression ratio: {}".format(a.nbytes / len(a_c)))
+            ratio[i].append(a.nbytes / a_c.nbytes)
 
-    # quantization psnr
-    print(np.allclose(a, a_uncompressed, atol=0.01))
-    # print(psnr(a, a_dequantized))
-    # print(a_quantized.nbytes / a.nbytes)
-    # print(a_compressed.nbytes / a.nbytes)
-    print("compression ratio: {}".format(a.nbytes / a_c.nbytes))
+    for i in range(1):
+        print(sum(ct[i]) / len(ct[i]))
+        print(sum(ut[i]) / len(ut[i]))
+        print(sum(ratio[i]) / len(ratio[i]))
+        print('\n')
