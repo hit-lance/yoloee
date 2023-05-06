@@ -22,8 +22,9 @@ def linear_quantize(x, bits=8):
     return x_q, x_max, x_min
 
 
-def linear_dequantize(x_q, x_max, x_min):
-    scale = (x_max - x_min) / 255
+def linear_dequantize(x_q, x_max, x_min, bits=8):
+    n = (2 << (bits - 1)) - 1
+    scale = (x_max - x_min) / n
     x = x_min + scale * x_q
     return x
 
@@ -35,9 +36,9 @@ def psnr(a, b):
     return 10 * np.log10((max_val**2) / mse)
 
 
-def compress(x, alg='lz4'):
+def compress(x, bits=8, alg='lz4'):
     x = x.reshape(-1)
-    x_q, x_max, x_min = linear_quantize(x)
+    x_q, x_max, x_min = linear_quantize(x, bits)
     if alg == 'lz4':
         x_c = bitshuffle.compress_lz4(x_q)
     elif alg == 'huffman':
@@ -45,7 +46,7 @@ def compress(x, alg='lz4'):
     return x_c, x_max, x_min
 
 
-def uncompress(x_c, x_max, x_min, x_shape, alg='lz4'):
+def uncompress(x_c, x_max, x_min, x_shape, bits=8, alg='lz4'):
     if alg == 'lz4':
         x = bitshuffle.decompress_lz4(x_c, (math.prod(x_shape), ),
                                       np.dtype('uint8'))
@@ -53,7 +54,7 @@ def uncompress(x_c, x_max, x_min, x_shape, alg='lz4'):
         x = codec.decode_streaming(x_c)
         x = np.array(list(x)).astype(np.uint8)
 
-    x = linear_dequantize(x, x_max, x_min)
+    x = linear_dequantize(x, x_max, x_min, bits)
     x = x.reshape(x_shape)
     return x
 
@@ -100,13 +101,13 @@ if __name__ == "__main__":
     with open("inters/test/1/0.npy", 'rb') as f:
         a = np.load(f)
 
-    alg='huffman'
+    alg = 'huffman'
 
-    a_c, a_max, a_min = compress(a, alg=alg)
+    a_c, a_max, a_min = compress(a, alg=alg, bits=8)
     a_uncompressed = uncompress(a_c, a_max, a_min, a.shape, alg=alg)
     print(np.allclose(a, a_uncompressed, atol=0.01))
-    
-    if  alg=='lz4':
+
+    if alg == 'lz4':
         print("compression ratio: {}".format(a.nbytes / a_c.nbytes))
-    elif  alg=='huffman':
+    elif alg == 'huffman':
         print("compression ratio: {}".format(a.nbytes / len(a_c)))
