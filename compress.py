@@ -1,9 +1,13 @@
+import pickle
 import numpy as np
 import bitshuffle
+from dahuffman import HuffmanCodec
 import time
 import math
-import huffman
 
+with open('frequency.pkl', 'rb') as f:
+    frequency = pickle.load(f)
+codec = HuffmanCodec.from_frequencies(frequency)
 
 def linear_quantize(x):
     # Compute the scale factor and zero point
@@ -29,45 +33,45 @@ def psnr(a, b):
     return 10 * np.log10((max_val**2) / mse)
 
 
-def compress(x):
-    x.reshape(-1)
+def compress(x, alg='lz4'):
+    x = x.reshape(-1)
     x_q, x_max, x_min = linear_quantize(x)
-    x_c = bitshuffle.compress_lz4(x_q)
+    if alg=='lz4':
+        x_c = bitshuffle.compress_lz4(x_q)
+    elif alg=='huffman':
+        x_c = codec.encode(x_q.astype('str').tolist())
     return x_c, x_max, x_min
 
 
-def uncompress(x_c, x_max, x_min, x_shape):
-    x = bitshuffle.decompress_lz4(x_c, (math.prod(x_shape), ),
+def uncompress(x_c, x_max, x_min, x_shape, alg='lz4'):
+    if alg=='lz4':
+        x = bitshuffle.decompress_lz4(x_c, (math.prod(x_shape), ),
                                   np.dtype('uint8'))
+    elif alg=='huffman':
+        x = codec.decode_streaming(x_c)
+        x = np.array(list(x)).astype(np.uint8)
+
     x = linear_dequantize(x, x_max, x_min)
     x = x.reshape(x_shape)
     return x
 
-
-if __name__ == "__main__":
+def benchmark():
     n = 16551
     ct = [[], [], []]
     ut = [[], [], []]
     ratio = [[], [], []]
-    for i in range(1):
-        for j in range(100):
+    for i in range(3):
+        for j in range(n):
             with open("inters/test/{}/{}.npy".format(i + 1, j), 'rb') as f:
                 a = np.load(f)
-                # a = np.clip(a, None, 1)
-                if i == 1:
-                    a = a.reshape(1, 128, 52, 26)
-                elif i == 2:
-                    a = a.reshape(1, 128, 26, 26)
 
             start = time.time()
-            # a_c = huffman.encode(a)
-            a_c, a_max, a_min = compress(a)
+            # a_c, a_max, a_min = compress(a)
+            a_c, a_max, a_min = linear_quantize(a)
             end = time.time()
             ct[i].append(end - start)
 
-            # uncompress+dequantize
             start = time.time()
-            # a_uncompressed = huffman.decode(a_c)
             a_uncompressed = uncompress(a_c, a_max, a_min, a.shape)
             end = time.time()
             ut[i].append(end - start)
@@ -79,10 +83,21 @@ if __name__ == "__main__":
             # print(a_compressed.nbytes / a.nbytes)
             # print("compression ratio: {}".format(a.nbytes / a_c.nbytes))
             # print("compression ratio: {}".format(a.nbytes / len(a_c)))
-            ratio[i].append(a.nbytes / a_c.nbytes)
+            ratio[i].append(a.nbytes / len(a_c))
+            break
 
-    for i in range(1):
+    for i in range(3):
         print(sum(ct[i]) / len(ct[i]))
         print(sum(ut[i]) / len(ut[i]))
         print(sum(ratio[i]) / len(ratio[i]))
         print('\n')
+
+if __name__ == "__main__":
+    with open("inters/test/1/0.npy", 'rb') as f:
+        a = np.load(f)
+    
+    a_c, a_max, a_min = compress(a, alg='huffman')
+    a_uncompressed = uncompress(a_c, a_max, a_min, a.shape, alg='huffman')
+    print(np.allclose(a, a_uncompressed, atol=0.01))
+    # print("compression ratio: {}".format(a.nbytes / a_c.nbytes))
+    print("compression ratio: {}".format(a.nbytes / len(a_c)))
