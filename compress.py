@@ -101,13 +101,19 @@ if __name__ == "__main__":
     with open("inters/test/1/0.npy", 'rb') as f:
         a = np.load(f)
 
-    alg = 'huffman'
+    alg = 'lz4'
+    for bits in range(1,9):
 
-    a_c, a_max, a_min = compress(a, alg=alg, bits=8)
-    a_uncompressed = uncompress(a_c, a_max, a_min, a.shape, alg=alg)
-    print(np.allclose(a, a_uncompressed, atol=0.01))
+        a_c, a_max, a_min = compress(a, alg=alg, bits=bits)
+        a_uncompressed = uncompress(a_c, a_max, a_min, a.shape, alg=alg, bits=bits)
+        # print(np.allclose(a, a_uncompressed, atol=0.01))
 
-    if alg == 'lz4':
+        # print(np.sum(np.abs(a - a_uncompressed)))
         print("compression ratio: {}".format(a.nbytes / a_c.nbytes))
-    elif alg == 'huffman':
-        print("compression ratio: {}".format(a.nbytes / len(a_c)))
+    # print(a[0][0][0][0])
+    # print(a_uncompressed[0][0][0][0])
+
+    # if alg == 'lz4':
+    #     print("compression ratio: {}".format(a.nbytes / a_c.nbytes))
+    # elif alg == 'huffman':
+    #     print("compression ratio: {}".format(a.nbytes / len(a_c)))
